@@ -81,4 +81,5 @@ test("migrated UI retains winner navigation and library behavior", () => {
     "function recordPlayed(station)", "Keys.onPressed", "QQC.TextField",
     "ListView {", "QQC.Slider",
   ]) assert.ok(qml.includes(feature), feature);
+  assert.match(qml, /activeCountryCode: root\.activeCountryCode/);
 });

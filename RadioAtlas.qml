@@ -300,7 +300,7 @@ Item {
       countries: root.countries
       stations: root.displayStations
       selectedStation: root.selectedStation
-      activeCode: root.activeCountryCode
+      activeCountryCode: root.activeCountryCode
       onStationActivated: function(station) {
         root.selectedStation = station
         root.play(station)
