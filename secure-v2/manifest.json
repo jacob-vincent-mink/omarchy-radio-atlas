@@ -26,13 +26,15 @@
   "permissions": {
     "required": [
       {
-        "capability": "radio-browser.directory",
-        "operations": ["world", "world-more", "country", "search", "random"],
+        "capability": "network.fetch",
+        "origins": ["https://all.api.radio-browser.info"],
+        "methods": ["GET"],
         "reason": "Find public radio stations without exposing general network access"
       },
       {
-        "capability": "media.radio-playback",
-        "operations": ["play", "pause", "stop", "mute", "volume", "status"],
+        "capability": "media.play-stream",
+        "sourceHandles": ["network.fetch"],
+        "controls": ["pause", "stop", "mute", "volume", "status"],
         "reason": "Play the selected station through a host-owned media session"
       },
       {
@@ -44,8 +46,8 @@
     ],
     "optional": [
       {
-        "capability": "lifecycle.screensaver",
-        "events": ["started"],
+        "capability": "system.observe",
+        "datasets": ["screensaver.state"],
         "reason": "Dismiss the atlas when the screensaver starts"
       }
     ]

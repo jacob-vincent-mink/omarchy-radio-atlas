@@ -20,7 +20,7 @@ test("candidate asks for purpose-built authority, never ambient escape hatches",
   const capabilities = [...manifest.permissions.required, ...manifest.permissions.optional]
     .map(request => request.capability);
   assert.deepEqual(capabilities, [
-    "radio-browser.directory", "media.radio-playback", "storage.private", "lifecycle.screensaver",
+    "network.fetch", "media.play-stream", "storage.private", "system.observe",
   ]);
   for (const forbidden of ["command.invoke", "http.request", "filesystem", "dbus", "wayland"])
     assert.equal(capabilities.includes(forbidden), false);
@@ -31,8 +31,8 @@ test("isolated QML has no ambient Quickshell, process, filesystem, or compositor
     "import Quickshell", "Process {", "FileView {", "PanelWindow {",
     "Hyprland", "WlrLayershell", "Quickshell.env", "Qt.resolvedUrl",
   ]) assert.equal(qml.includes(forbidden), false, forbidden);
-  assert.match(qml, /runtime\.invoke\("radio_directory_world"/);
-  assert.match(qml, /runtime\.invoke\("radio_playback_play"/);
+  assert.match(qml, /runtime\.invoke\("network_fetch"/);
+  assert.match(qml, /runtime\.invoke\("media_play_stream"/);
 });
 
 test("port keeps the product station model and globe exactly", () => {

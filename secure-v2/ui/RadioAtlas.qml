@@ -19,12 +19,16 @@ Item {
   }
 
   function refreshWorld() {
-    applyDirectoryResult(runtime.invoke("radio_directory_world", {limit: 5000}))
+    applyDirectoryResult(runtime.invoke("network_fetch", {
+      operation: "radio-directory.world", limit: 5000
+    }))
   }
 
   function play(station) {
     if (!station || !station.uuid) return false
-    var accepted = runtime.invoke("radio_playback_play", {station: station.uuid})
+    var accepted = runtime.invoke("media_play_stream", {
+      handle: station.playbackHandle
+    })
     if (accepted) {
       selectedStation = station
       playing = true
@@ -35,12 +39,16 @@ Item {
 
   function setVolume(nextVolume) {
     var bounded = Math.max(0, Math.min(100, Math.round(Number(nextVolume))))
-    if (runtime.invoke("radio_playback_volume", {value: bounded})) volume = bounded
+    if (runtime.invoke("media_stream_control", {
+      control: "volume", value: bounded
+    })) volume = bounded
   }
 
   function toggleFavorite(station) {
     if (!station || !station.uuid) return false
-    return runtime.invoke("radio_state_toggle_favorite", {station: station.uuid}) === true
+    return runtime.invoke("storage_private_update", {
+      key: "favorites", operation: "toggle", station: station.uuid
+    }) === true
   }
 
   Component.onCompleted: refreshWorld()
