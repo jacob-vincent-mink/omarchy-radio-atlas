@@ -87,6 +87,32 @@ Item {
     } catch (error) { return null }
   }
 
+  function loadCountries() {
+    var request = new XMLHttpRequest()
+    request.onreadystatechange = function() {
+      if (request.readyState !== XMLHttpRequest.DONE) return
+      if (request.status !== 0 && request.status !== 200) {
+        root.errorText = "Map data could not be loaded"
+        return
+      }
+      var text = String(request.responseText || "")
+      if (text.length === 0 || text.length > 524288) {
+        root.errorText = "Map data exceeded its bundled limit"
+        return
+      }
+      try {
+        var collection = JSON.parse(text)
+        root.countries = Array.isArray(collection.features)
+          ? collection.features.slice(0, 512) : []
+      } catch (error) {
+        root.countries = []
+        root.errorText = "Map data could not be loaded"
+      }
+    }
+    request.open("GET", Qt.resolvedUrl("assets/countries.json"))
+    request.send()
+  }
+
   function finishFetch() {
     if (!fetchCall || !fetchCall.finished) return
     fetching = false
@@ -280,7 +306,7 @@ Item {
 
   function stepForTest() { refreshWorld() }
 
-  Qml.Component.onCompleted: { loadLocalState(); refreshWorld() }
+  Qml.Component.onCompleted: { loadCountries(); loadLocalState(); refreshWorld() }
 
   Qml.Connections {
     target: runtime
@@ -359,10 +385,10 @@ Item {
 
         Row {
           spacing: 6
-          QQC.Button { text: "World"; onClicked: root.showWorld() }
-          QQC.Button { text: "Favorites"; onClicked: root.showFavorites() }
-          QQC.Button { text: "Recent"; onClicked: root.showRecent() }
-          QQC.Button { text: "Random"; onClicked: root.tuneRandom() }
+          P.Button { text: "World"; onClicked: root.showWorld() }
+          P.Button { text: "Favorites"; onClicked: root.showFavorites() }
+          P.Button { text: "Recent"; onClicked: root.showRecent() }
+          P.Button { text: "Random"; onClicked: root.tuneRandom() }
         }
 
         Text {
@@ -419,18 +445,23 @@ Item {
 
         Row {
           spacing: 8
-          QQC.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing; onClicked: root.controlPlayer("pause") }
-          QQC.Button { text: "Stop"; enabled: root.playing; onClicked: root.controlPlayer("stop") }
-          QQC.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing; onClicked: root.controlPlayer("mute") }
-          QQC.Button { text: root.isFavorite(root.selectedStation && root.selectedStation.uuid) ? "★" : "☆"; enabled: !!root.selectedStation; onClicked: root.toggleFavorite(root.selectedStation) }
+          P.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing; onClicked: root.controlPlayer("pause") }
+          P.Button { text: "Stop"; enabled: root.playing; onClicked: root.controlPlayer("stop") }
+          P.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing; onClicked: root.controlPlayer("mute") }
+          P.Button { text: root.isFavorite(root.selectedStation && root.selectedStation.uuid) ? "★" : "☆"; enabled: !!root.selectedStation; onClicked: root.toggleFavorite(root.selectedStation) }
         }
 
-        QQC.Slider {
+        P.PanelSlider {
           width: parent.width
-          from: 0
-          to: 100
+          height: 32
+          minimum: 0
+          maximum: 100
           value: root.volume
-          onMoved: { root.volume = Math.round(value); root.setVolume(root.volume) }
+          integer: true
+          onReleased: function(nextValue) {
+            root.volume = Math.round(nextValue)
+            root.setVolume(root.volume)
+          }
         }
       }
     }

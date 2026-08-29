@@ -35,7 +35,7 @@ test("candidate asks for purpose-built authority, never ambient escape hatches",
 test("isolated QML has no ambient Quickshell, process, filesystem, or compositor API", () => {
   for (const source of [qml, barQml]) for (const forbidden of [
     "import Quickshell", "Process {", "FileView {", "PanelWindow {",
-    "Hyprland", "WlrLayershell", "Quickshell.env", "Qt.resolvedUrl",
+    "Hyprland", "WlrLayershell", "Quickshell.env",
   ]) assert.equal(source.includes(forbidden), false, forbidden);
   assert.match(qml, /runtime\.invoke\("fetch"/);
   assert.match(qml, /runtime\.invoke\("play"/);
@@ -69,6 +69,8 @@ test("port keeps the product station model and globe in their original files", (
 
 test("directory response is bounded and optional observation has a fallback", () => {
   assert.match(qml, /result\.stations\.length > 64/);
+  assert.match(qml, /Qt\.resolvedUrl\("assets\/countries\.json"\)/);
+  assert.match(qml, /text\.length > 524288/);
   assert.match(qml, /permissionSnapshot\["system\.observe"\]\.observe === true/);
   assert.match(qml, /Directory unavailable:/);
 });
@@ -79,7 +81,7 @@ test("migrated UI retains winner navigation and library behavior", () => {
     "function showFavorites()", "function showRecent()", "function tuneRandom()",
     "function moveSelection(delta)", "function toggleFavorite(station)",
     "function recordPlayed(station)", "Keys.onPressed", "QQC.TextField",
-    "ListView {", "QQC.Slider",
+    "ListView {", "P.PanelSlider",
   ]) assert.ok(qml.includes(feature), feature);
   assert.match(qml, /activeCountryCode: root\.activeCountryCode/);
   assert.match(qml, /permissionState\("network\.fetch", "fetch"\)/);
