@@ -4,12 +4,11 @@ set -euo pipefail
 project_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 jq -e '
-  .schemaVersion == 1
+  .schemaVersion == 2
   and .id == "akshar.radio-atlas"
-  and .version == "0.1.4"
-  and (.kinds | index("overlay"))
-  and (.kinds | index("bar-widget"))
-  and .keepLoaded == true
+  and .runtime.qml == "secure-v2/ui/RadioAtlas.qml"
+  and .surfaces.atlas.role == "desktop-overlay"
+  and .surfaces.barWidget.role == "bar-embedded"
 ' "$project_dir/manifest.json" >/dev/null
 
 bash -n "$project_dir/radio-fetch" "$project_dir/radio-player" \

@@ -31,8 +31,18 @@ test("isolated QML has no ambient Quickshell, process, filesystem, or compositor
     "import Quickshell", "Process {", "FileView {", "PanelWindow {",
     "Hyprland", "WlrLayershell", "Quickshell.env", "Qt.resolvedUrl",
   ]) assert.equal(qml.includes(forbidden), false, forbidden);
-  assert.match(qml, /runtime\.invoke\("network_fetch"/);
-  assert.match(qml, /runtime\.invoke\("media_play_stream"/);
+  assert.match(qml, /runtime\.invoke\("fetch"/);
+  assert.match(qml, /runtime\.invoke\("play"/);
+  assert.match(qml, /runtime\.invoke\("control"/);
+});
+
+test("dynamic requests pin trusted definitions and operations", () => {
+  const requests = [...manifest.permissions.required, ...manifest.permissions.optional];
+  for (const request of requests.filter(item => item.capability !== "storage.private")) {
+    assert.equal(request.definitionGeneration, 1);
+    assert.match(request.definitionDigest, /^[0-9a-f]{64}$/);
+    assert.ok(request.operations.length > 0);
+  }
 });
 
 test("port keeps the product station model and globe exactly", () => {

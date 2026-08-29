@@ -27,12 +27,18 @@
     "required": [
       {
         "capability": "network.fetch",
+        "definitionGeneration": 1,
+        "definitionDigest": "1b1d34c104f5850ef21c6b16c6d71daa19fe3b7a35f38ab5892d640faf9f5874",
+        "operations": ["fetch"],
         "origins": ["https://all.api.radio-browser.info"],
         "methods": ["GET"],
         "reason": "Find public radio stations without exposing general network access"
       },
       {
         "capability": "media.play-stream",
+        "definitionGeneration": 1,
+        "definitionDigest": "2c0698cd289b084479aa0992cd11ec191b651af0f837e1030aabfed3fdc4e4c9",
+        "operations": ["control", "play"],
         "sourceHandles": ["network.fetch"],
         "controls": ["pause", "stop", "mute", "volume", "status"],
         "reason": "Play the selected station through a host-owned media session"
@@ -47,6 +53,9 @@
     "optional": [
       {
         "capability": "system.observe",
+        "definitionGeneration": 1,
+        "definitionDigest": "dc22d694f498eeb21af02a9e6d0313b20fd2a0e20db5cab64c08630999cfa84c",
+        "operations": ["observe"],
         "datasets": ["screensaver.state"],
         "reason": "Dismiss the atlas when the screensaver starts"
       }

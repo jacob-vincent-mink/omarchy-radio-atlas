@@ -19,15 +19,17 @@ Item {
   }
 
   function refreshWorld() {
-    applyDirectoryResult(runtime.invoke("network_fetch", {
-      operation: "radio-directory.world", limit: 5000
+    applyDirectoryResult(runtime.invoke("fetch", {
+      demandScope: '{"methods":["GET"],"origins":["https://all.api.radio-browser.info"]}',
+      payload: {operation: "radio-directory.world", limit: 5000}
     }))
   }
 
   function play(station) {
     if (!station || !station.uuid) return false
-    var accepted = runtime.invoke("media_play_stream", {
-      handle: station.playbackHandle
+    var accepted = runtime.invoke("play", {
+      demandScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}',
+      payload: {handle: station.playbackHandle}
     })
     if (accepted) {
       selectedStation = station
@@ -39,16 +41,23 @@ Item {
 
   function setVolume(nextVolume) {
     var bounded = Math.max(0, Math.min(100, Math.round(Number(nextVolume))))
-    if (runtime.invoke("media_stream_control", {
-      control: "volume", value: bounded
+    if (runtime.invoke("control", {
+      demandScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}',
+      payload: {control: "volume", value: bounded}
     })) volume = bounded
   }
 
   function toggleFavorite(station) {
     if (!station || !station.uuid) return false
-    return runtime.invoke("storage_private_update", {
-      key: "favorites", operation: "toggle", station: station.uuid
+    return runtime.invoke("storage_write", {
+      key: "favorites", value: JSON.stringify({operation: "toggle", station: station.uuid}),
+      quotaBytes: 1048576, itemBytes: 262144
     }) === true
+  }
+
+  function stepForTest() {
+    refreshWorld()
+    setVolume(55)
   }
 
   Component.onCompleted: refreshWorld()
