@@ -24,6 +24,8 @@ Item {
     runtime.permissionState("system.observe", "observe") === "granted"
 
   function decodeUtf8(value, maximumBytes) {
+    if (typeof value === "string")
+      return value.length > 0 && value.length <= maximumBytes ? value : null
     var bytes = null
     if (value instanceof ArrayBuffer) bytes = new Uint8Array(value)
     else if (ArrayBuffer.isView(value)) bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
@@ -63,7 +65,7 @@ Item {
       statusText = "Radio Atlas — offline"
       return
     }
-    var decoded = decodeDirectory(fetchCall.value)
+    var decoded = decodeDirectory(fetchCall.utf8Text)
     if (decoded === null) {
       errorText = "Directory provider returned an invalid response"
       statusText = "Radio Atlas — unavailable"
@@ -125,13 +127,11 @@ Item {
   Qml.Component.onCompleted: refreshWorld()
 
   Qml.Connections {
-    target: root.fetchCall
-    function onFinishedChanged() { root.finishFetch() }
-  }
-
-  Qml.Connections {
-    target: root.mediaCall
-    function onFinishedChanged() { root.finishMedia() }
+    target: runtime
+    function onCallFinished(call) {
+      if (call === root.fetchCall) root.finishFetch()
+      else if (call === root.mediaCall) root.finishMedia()
+    }
   }
 
   Rectangle {

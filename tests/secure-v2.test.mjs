@@ -37,6 +37,8 @@ test("isolated QML has no ambient Quickshell, process, filesystem, or compositor
   assert.match(qml, /runtime\.invoke\("play"/);
   assert.match(qml, /runtime\.invoke\("control"/);
   assert.match(qml, /decodeDirectory/);
+  assert.match(qml, /decodeDirectory\(fetchCall\.utf8Text\)/);
+  assert.match(qml, /function onCallFinished\(call\)/);
   assert.match(qml, /playbackHandle/);
   assert.equal(qml.includes("url_resolved"), false);
   assert.match(barQml, /runtime\.invoke\("control"/);
