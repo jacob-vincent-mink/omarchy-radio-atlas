@@ -33,6 +33,7 @@ Item {
   property int volume: 70
   property bool paused: false
   property bool muted: false
+  property string playerTitle: ""
   property var storageCall: null
   property string pendingStorageAction: ""
   readonly property var displayStations: mode === "favorites" ? favorites
@@ -159,12 +160,20 @@ Item {
       playing = false
       return
     }
-    selectedStation = pendingPlayStation
-    playing = true
-    paused = false
-    recordPlayed(selectedStation)
+    var state = ({})
+    try { state = JSON.parse(mediaCall.utf8Text || "{}") } catch (error) {}
+    if (pendingPlayStation) {
+      selectedStation = pendingPlayStation
+      recordPlayed(selectedStation)
+      pendingPlayStation = null
+    }
+    playing = state.running === undefined ? true : state.running === true
+    paused = state.paused === true
+    muted = state.muted === true
+    if (state.volume !== undefined) volume = Math.max(0, Math.min(100, Math.round(Number(state.volume))))
+    playerTitle = String(state.title || selectedStation && selectedStation.name || "").slice(0, 160)
     errorText = ""
-    statusText = String(selectedStation && selectedStation.name || "Radio Atlas")
+    statusText = playerTitle || "Radio Atlas"
   }
 
   function play(station) {
@@ -186,9 +195,6 @@ Item {
   function controlPlayer(control, value) {
     mediaCall = runtime.invoke("control", {demandScope: mediaScope,
       payload: control === "volume" ? {control: control, value: value} : {control: control}})
-    if (control === "pause") paused = !paused
-    else if (control === "mute") muted = !muted
-    else if (control === "stop") { playing = false; paused = false }
   }
 
   function stationByUuid(uuid) {
