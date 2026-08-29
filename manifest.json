@@ -4,7 +4,14 @@
   "name": "Radio Atlas",
   "version": "0.2.0-secure-preview",
   "description": "Secure-runtime port preserving the interactive QML globe while moving authority behind typed providers.",
-  "runtime": {"apiVersion": 1, "qml": "RadioAtlas.qml"},
+  "runtime": {
+    "apiVersion": 1,
+    "qml": "RadioAtlas.qml",
+    "surfaceQml": {
+      "atlas": "RadioAtlas.qml",
+      "barWidget": "BarWidget.qml"
+    }
+  },
   "surfaces": {
     "atlas": {"role": "desktop-overlay", "maximumWidth": 1440, "maximumHeight": 1000, "maximumFramesPerSecond": 60, "keyboardFocus": "after-gesture", "lockScreenVisible": false, "inputRegions": "dynamic-bounded"},
     "barWidget": {"role": "bar-embedded", "maximumWidth": 72, "maximumHeight": 64, "maximumFramesPerSecond": 30, "defaultSection": "left"}

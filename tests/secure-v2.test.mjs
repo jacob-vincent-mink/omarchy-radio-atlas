@@ -12,6 +12,10 @@ test("secure candidate declares bounded host-owned surfaces", () => {
   assert.equal(manifest.schemaVersion, 2);
   assert.equal(manifest.runtime.apiVersion, 1);
   assert.equal(manifest.runtime.qml, "RadioAtlas.qml");
+  assert.deepEqual(manifest.runtime.surfaceQml, {
+    atlas: "RadioAtlas.qml",
+    barWidget: "BarWidget.qml",
+  });
   assert.deepEqual(Object.keys(manifest.surfaces).sort(), ["atlas", "barWidget"]);
   assert.equal(manifest.surfaces.atlas.role, "desktop-overlay");
   assert.equal(manifest.surfaces.atlas.keyboardFocus, "after-gesture");
