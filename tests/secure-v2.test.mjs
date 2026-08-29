@@ -69,7 +69,7 @@ test("port keeps the product station model and globe in their original files", (
 
 test("directory response is bounded and optional observation has a fallback", () => {
   assert.match(qml, /result\.stations\.length > 64/);
-  assert.match(qml, /runtime\.permissionState\("system\.observe", "observe"\)/);
+  assert.match(qml, /permissionSnapshot\["system\.observe"\]\.observe === true/);
   assert.match(qml, /Directory unavailable:/);
 });
 

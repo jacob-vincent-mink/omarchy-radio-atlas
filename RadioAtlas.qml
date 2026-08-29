@@ -38,10 +38,13 @@ Item {
   property string pendingStorageAction: ""
   readonly property var displayStations: mode === "favorites" ? favorites
     : mode === "recent" ? recent : results
+  readonly property var permissionSnapshot: runtime.permissions
   readonly property bool screensaverAwarenessAvailable:
-    runtime.permissionState("system.observe", "observe") === "granted"
+    !!permissionSnapshot["system.observe"]
+      && permissionSnapshot["system.observe"].observe === true
   readonly property bool directoryAvailable:
-    runtime.permissionState("network.fetch", "fetch") === "granted"
+    !!permissionSnapshot["network.fetch"]
+      && permissionSnapshot["network.fetch"].fetch === true
 
   function decodeUtf8(value, maximumBytes) {
     if (typeof value === "string")
@@ -280,7 +283,7 @@ Item {
       else if (call === root.storageCall) root.finishStorage()
     }
     function onPermissionsChanged() {
-      if (!root.directoryAvailable) {
+      if (runtime.permissionState("network.fetch", "fetch") !== "granted") {
         root.fetching = false
         root.errorText = "Radio directory permission was revoked"
         root.statusText = "Radio Atlas — directory unavailable"
