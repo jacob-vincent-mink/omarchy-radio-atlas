@@ -84,4 +84,9 @@ test("migrated UI retains winner navigation and library behavior", () => {
   assert.match(qml, /activeCountryCode: root\.activeCountryCode/);
   assert.match(qml, /permissionState\("network\.fetch", "fetch"\)/);
   assert.match(qml, /Radio directory permission was revoked/);
+  assert.match(qml, /import Omarchy\.PluginPresentation 1\.0 as P/);
+  assert.match(barQml, /P\.BarWidget \{/);
+  assert.match(barQml, /P\.WidgetButton \{/);
+  assert.match(barQml, /runtime\.invoke\("control"/);
+  assert.match(barQml, /JSON\.parse\(mediaCall\.utf8Text/);
 });

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQml as Qml
+import Omarchy.PluginPresentation 1.0 as P
 import "RadioModel.js" as RadioModel
 
 Item {
@@ -45,6 +46,12 @@ Item {
   readonly property bool directoryAvailable:
     !!permissionSnapshot["network.fetch"]
       && permissionSnapshot["network.fetch"].fetch === true
+  readonly property color background: "#090a0c"
+  readonly property color foreground: P.Color.foreground
+  readonly property color accent: P.Color.accent
+  readonly property color urgent: P.Color.urgent
+  readonly property color dim: P.Color.alpha(foreground, 0.56)
+  readonly property color faint: P.Color.alpha(foreground, 0.12)
 
   function decodeUtf8(value, maximumBytes) {
     if (typeof value === "string")
@@ -294,8 +301,8 @@ Item {
   Rectangle {
     anchors.fill: parent
     radius: 22
-    color: "#090a0c"
-    border.color: root.errorText ? "#d96b6b" : "#283039"
+    color: root.background
+    border.color: root.errorText ? root.urgent : root.faint
     focus: true
     Keys.onPressed: function(event) {
       if (event.key === Qt.Key_Down || event.key === Qt.Key_J) root.moveSelection(1)
@@ -332,15 +339,15 @@ Item {
       anchors.right: parent.right
       anchors.bottom: parent.bottom
       width: Math.min(390, parent.width * 0.38)
-      color: "#11151a"
-      border.color: "#283039"
+      color: P.Color.alpha(root.background, 0.96)
+      border.color: root.faint
 
       Column {
         anchors.fill: parent
         anchors.margins: 18
         spacing: 10
 
-        Text { text: "Radio Atlas"; color: "#f3f4f5"; font.pixelSize: 24; font.bold: true }
+        Text { text: "RADIO ATLAS"; color: root.foreground; font.family: P.Style.font.family; font.pixelSize: 24; font.bold: true }
 
         QQC.TextField {
           width: parent.width
@@ -361,7 +368,7 @@ Item {
         Text {
           width: parent.width
           text: root.mode === "country" ? root.activeCountryName : root.mode.charAt(0).toUpperCase() + root.mode.slice(1)
-          color: "#9da7b1"
+          color: root.dim
           elide: Text.ElideRight
         }
 
@@ -378,14 +385,15 @@ Item {
             width: stationList.width
             height: 48
             radius: 7
-            color: root.selectedStation && root.selectedStation.uuid === modelData.uuid ? "#283b4b" : "transparent"
+              color: root.selectedStation && root.selectedStation.uuid === modelData.uuid ? P.Color.alpha(root.accent, 0.22) : "transparent"
             Text {
               anchors.left: parent.left
               anchors.right: favorite.left
               anchors.verticalCenter: parent.verticalCenter
               anchors.leftMargin: 10
               text: modelData.name + (modelData.countryCode ? "  ·  " + modelData.countryCode : "")
-              color: "#f3f4f5"
+              color: root.foreground
+              font.family: P.Style.font.family
               elide: Text.ElideRight
             }
             Text {
@@ -394,7 +402,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
               anchors.rightMargin: 10
               text: root.isFavorite(modelData.uuid) ? "★" : "☆"
-              color: root.isFavorite(modelData.uuid) ? "#f2c94c" : "#77818b"
+              color: root.isFavorite(modelData.uuid) ? root.accent : root.dim
             }
             MouseArea {
               anchors.fill: parent
@@ -432,7 +440,7 @@ Item {
       anchors.right: sidebar.left
       anchors.bottom: parent.bottom
       height: 72
-      color: "#e611151a"
+      color: P.Color.alpha(root.background, 0.9)
 
       Text {
         anchors.left: parent.left
@@ -441,7 +449,8 @@ Item {
         anchors.rightMargin: 24
         anchors.verticalCenter: parent.verticalCenter
         text: root.errorText || root.statusText
-        color: root.errorText ? "#ff9b9b" : "#f3f4f5"
+        color: root.errorText ? root.urgent : root.foreground
+        font.family: P.Style.font.family
         font.pixelSize: 18
         textFormat: Text.PlainText
         elide: Text.ElideRight
