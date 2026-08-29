@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as QQC
 import QtQml as Qml
 import "RadioModel.js" as RadioModel
 
@@ -11,6 +12,16 @@ Item {
   readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
   property var countries: []
   property var stations: []
+  property var results: []
+  property var favorites: []
+  property var recent: []
+  property var favoriteUuids: []
+  property var recentUuids: []
+  property string mode: "world"
+  property string activeCountryCode: ""
+  property string activeCountryName: ""
+  property string searchText: ""
+  property int selectedIndex: -1
   property var selectedStation: null
   property var pendingPlayStation: null
   property var fetchCall: null
@@ -20,6 +31,12 @@ Item {
   property bool fetching: false
   property bool playing: false
   property int volume: 70
+  property bool paused: false
+  property bool muted: false
+  property var storageCall: null
+  property string pendingStorageAction: ""
+  readonly property var displayStations: mode === "favorites" ? favorites
+    : mode === "recent" ? recent : results
   readonly property bool screensaverAwarenessAvailable:
     runtime.permissionState("system.observe", "observe") === "granted"
 
@@ -72,6 +89,11 @@ Item {
       return
     }
     stations = RadioModel.mergeStations(stations, decoded, 5000)
+    favorites = favoriteUuids.map(stationByUuid).filter(Boolean)
+    recent = recentUuids.map(stationByUuid).filter(Boolean)
+    if (mode === "world") results = stations
+    else if (mode === "search") results = RadioModel.searchStations(stations, searchText, 150)
+    else if (mode === "country") results = RadioModel.stationsForCountry(stations, activeCountryCode, 150)
     errorText = ""
     statusText = stations.length + " HTTPS stations"
   }
@@ -86,6 +108,50 @@ Item {
     if (fetchCall && fetchCall.finished) finishFetch()
   }
 
+  function setStationList(nextMode, nextStations) {
+    mode = nextMode
+    results = Array.isArray(nextStations) ? nextStations : []
+    selectedIndex = results.length > 0 ? 0 : -1
+    selectedStation = selectedIndex >= 0 ? results[selectedIndex] : null
+  }
+
+  function showWorld() {
+    searchText = ""
+    activeCountryCode = ""
+    activeCountryName = ""
+    setStationList("world", stations)
+  }
+
+  function showFavorites() { setStationList("favorites", favorites) }
+  function showRecent() { setStationList("recent", recent) }
+
+  function search(text) {
+    searchText = String(text || "").trim()
+    if (!searchText) { showWorld(); return }
+    setStationList("search", RadioModel.searchStations(stations, searchText, 150))
+  }
+
+  function browseCountry(code, name) {
+    activeCountryCode = String(code || "").toUpperCase().slice(0, 2)
+    activeCountryName = String(name || "").slice(0, 96)
+    setStationList("country", RadioModel.stationsForCountry(stations, activeCountryCode, 150))
+  }
+
+  function moveSelection(delta) {
+    if (displayStations.length === 0) return
+    selectedIndex = (selectedIndex + delta + displayStations.length) % displayStations.length
+    selectedStation = displayStations[selectedIndex]
+  }
+
+  function tuneRandom() {
+    var pool = displayStations.length > 0 ? displayStations : stations
+    if (pool.length === 0) return false
+    var index = Math.floor(Math.random() * pool.length)
+    selectedIndex = index
+    selectedStation = pool[index]
+    return play(selectedStation)
+  }
+
   function finishMedia() {
     if (!mediaCall || !mediaCall.finished) return
     if (!mediaCall.ok) {
@@ -95,6 +161,8 @@ Item {
     }
     selectedStation = pendingPlayStation
     playing = true
+    paused = false
+    recordPlayed(selectedStation)
     errorText = ""
     statusText = String(selectedStation && selectedStation.name || "Radio Atlas")
   }
@@ -115,22 +183,87 @@ Item {
     if (call && call.finished && call.ok) volume = bounded
   }
 
+  function controlPlayer(control, value) {
+    mediaCall = runtime.invoke("control", {demandScope: mediaScope,
+      payload: control === "volume" ? {control: control, value: value} : {control: control}})
+    if (control === "pause") paused = !paused
+    else if (control === "mute") muted = !muted
+    else if (control === "stop") { playing = false; paused = false }
+  }
+
+  function stationByUuid(uuid) {
+    for (var i = 0; i < stations.length; ++i)
+      if (stations[i].uuid === uuid) return stations[i]
+    return null
+  }
+
+  function isFavorite(uuid) {
+    for (var i = 0; i < favorites.length; ++i)
+      if (favorites[i].uuid === uuid) return true
+    return false
+  }
+
   function toggleFavorite(station) {
     if (!station || !station.uuid) return false
-    runtime.invoke("storage_write", {key: "favorites", value: JSON.stringify({operation: "toggle", station: station.uuid}),
-      quotaBytes: 1048576, itemBytes: 262144})
+    var next = []
+    var removed = false
+    for (var i = 0; i < favorites.length; ++i) {
+      if (favorites[i].uuid === station.uuid) removed = true
+      else next.push(favorites[i])
+    }
+    if (!removed) next.unshift(station)
+    favorites = next.slice(0, 100)
+    favoriteUuids = favorites.map(function(row) { return row.uuid })
+    saveLocalState()
     return true
+  }
+
+  function recordPlayed(station) {
+    if (!station || !station.uuid) return
+    var next = [station]
+    for (var i = 0; i < recent.length && next.length < 50; ++i)
+      if (recent[i].uuid !== station.uuid) next.push(recent[i])
+    recent = next
+    recentUuids = recent.map(function(row) { return row.uuid })
+    saveLocalState()
+  }
+
+  function saveLocalState() {
+    pendingStorageAction = "write"
+    storageCall = runtime.invoke("storage_write", {key: "radio-state-v1",
+      value: JSON.stringify({favorites: favoriteUuids,
+        recent: recentUuids, volume: volume}),
+      quotaBytes: 1048576, itemBytes: 262144})
+  }
+
+  function loadLocalState() {
+    pendingStorageAction = "read"
+    storageCall = runtime.invoke("storage_read", {key: "radio-state-v1",
+      quotaBytes: 1048576, itemBytes: 262144})
+  }
+
+  function finishStorage() {
+    if (!storageCall || !storageCall.finished || !storageCall.ok || pendingStorageAction !== "read") return
+    try {
+      var state = JSON.parse(storageCall.utf8Text || "{}")
+      volume = Math.max(0, Math.min(100, Math.round(Number(state.volume || 70))))
+      favoriteUuids = Array.isArray(state.favorites) ? state.favorites.slice(0, 100) : []
+      recentUuids = Array.isArray(state.recent) ? state.recent.slice(0, 50) : []
+      favorites = favoriteUuids.map(stationByUuid).filter(Boolean)
+      recent = recentUuids.map(stationByUuid).filter(Boolean)
+    } catch (error) {}
   }
 
   function stepForTest() { refreshWorld() }
 
-  Qml.Component.onCompleted: refreshWorld()
+  Qml.Component.onCompleted: { loadLocalState(); refreshWorld() }
 
   Qml.Connections {
     target: runtime
     function onCallFinished(call) {
       if (call === root.fetchCall) root.finishFetch()
       else if (call === root.mediaCall) root.finishMedia()
+      else if (call === root.storageCall) root.finishStorage()
     }
   }
 
@@ -139,20 +272,140 @@ Item {
     radius: 22
     color: "#090a0c"
     border.color: root.errorText ? "#d96b6b" : "#283039"
+    focus: true
+    Keys.onPressed: function(event) {
+      if (event.key === Qt.Key_Down || event.key === Qt.Key_J) root.moveSelection(1)
+      else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) root.moveSelection(-1)
+      else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.play(root.selectedStation)
+      else if (event.key === Qt.Key_Space) root.controlPlayer("pause")
+      else if (event.key === Qt.Key_R) root.tuneRandom()
+      else if (event.key === Qt.Key_F) root.toggleFavorite(root.selectedStation)
+      else return
+      event.accepted = true
+    }
 
     Globe {
       id: globe
-      anchors.fill: parent
+      anchors.left: parent.left
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      anchors.right: sidebar.left
       anchors.margins: 24
       countries: root.countries
-      stations: root.stations
+      stations: root.displayStations
       selectedStation: root.selectedStation
-      onStationActivated: function(station) { root.play(station) }
+      activeCode: root.activeCountryCode
+      onStationActivated: function(station) {
+        root.selectedStation = station
+        root.play(station)
+      }
+      onCountryActivated: function(code, name) { root.browseCountry(code, name) }
+    }
+
+    Rectangle {
+      id: sidebar
+      anchors.top: parent.top
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      width: Math.min(390, parent.width * 0.38)
+      color: "#11151a"
+      border.color: "#283039"
+
+      Column {
+        anchors.fill: parent
+        anchors.margins: 18
+        spacing: 10
+
+        Text { text: "Radio Atlas"; color: "#f3f4f5"; font.pixelSize: 24; font.bold: true }
+
+        QQC.TextField {
+          width: parent.width
+          placeholderText: "Search stations"
+          text: root.searchText
+          onAccepted: root.search(text)
+          onTextEdited: root.search(text)
+        }
+
+        Row {
+          spacing: 6
+          QQC.Button { text: "World"; onClicked: root.showWorld() }
+          QQC.Button { text: "Favorites"; onClicked: root.showFavorites() }
+          QQC.Button { text: "Recent"; onClicked: root.showRecent() }
+          QQC.Button { text: "Random"; onClicked: root.tuneRandom() }
+        }
+
+        Text {
+          width: parent.width
+          text: root.mode === "country" ? root.activeCountryName : root.mode.charAt(0).toUpperCase() + root.mode.slice(1)
+          color: "#9da7b1"
+          elide: Text.ElideRight
+        }
+
+        ListView {
+          id: stationList
+          width: parent.width
+          height: Math.max(120, parent.height - 255)
+          clip: true
+          model: root.displayStations
+          currentIndex: root.selectedIndex
+          delegate: Rectangle {
+            required property var modelData
+            required property int index
+            width: stationList.width
+            height: 48
+            radius: 7
+            color: root.selectedStation && root.selectedStation.uuid === modelData.uuid ? "#283b4b" : "transparent"
+            Text {
+              anchors.left: parent.left
+              anchors.right: favorite.left
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.leftMargin: 10
+              text: modelData.name + (modelData.countryCode ? "  ·  " + modelData.countryCode : "")
+              color: "#f3f4f5"
+              elide: Text.ElideRight
+            }
+            Text {
+              id: favorite
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.rightMargin: 10
+              text: root.isFavorite(modelData.uuid) ? "★" : "☆"
+              color: root.isFavorite(modelData.uuid) ? "#f2c94c" : "#77818b"
+            }
+            MouseArea {
+              anchors.fill: parent
+              acceptedButtons: Qt.LeftButton | Qt.RightButton
+              onClicked: function(mouse) {
+                root.selectedIndex = index
+                root.selectedStation = modelData
+                if (mouse.button === Qt.RightButton) root.toggleFavorite(modelData)
+                else root.play(modelData)
+              }
+            }
+          }
+        }
+
+        Row {
+          spacing: 8
+          QQC.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing; onClicked: root.controlPlayer("pause") }
+          QQC.Button { text: "Stop"; enabled: root.playing; onClicked: root.controlPlayer("stop") }
+          QQC.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing; onClicked: root.controlPlayer("mute") }
+          QQC.Button { text: root.isFavorite(root.selectedStation && root.selectedStation.uuid) ? "★" : "☆"; enabled: !!root.selectedStation; onClicked: root.toggleFavorite(root.selectedStation) }
+        }
+
+        QQC.Slider {
+          width: parent.width
+          from: 0
+          to: 100
+          value: root.volume
+          onMoved: { root.volume = Math.round(value); root.setVolume(root.volume) }
+        }
+      }
     }
 
     Rectangle {
       anchors.left: parent.left
-      anchors.right: parent.right
+      anchors.right: sidebar.left
       anchors.bottom: parent.bottom
       height: 72
       color: "#e611151a"

@@ -68,3 +68,13 @@ test("directory response is bounded and optional observation has a fallback", ()
   assert.match(qml, /runtime\.permissionState\("system\.observe", "observe"\)/);
   assert.match(qml, /Directory unavailable:/);
 });
+
+test("migrated UI retains winner navigation and library behavior", () => {
+  for (const feature of [
+    "function search(text)", "function browseCountry(code, name)",
+    "function showFavorites()", "function showRecent()", "function tuneRandom()",
+    "function moveSelection(delta)", "function toggleFavorite(station)",
+    "function recordPlayed(station)", "Keys.onPressed", "QQC.TextField",
+    "ListView {", "QQC.Slider",
+  ]) assert.ok(qml.includes(feature), feature);
+});
