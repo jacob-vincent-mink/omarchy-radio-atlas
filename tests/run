@@ -17,6 +17,7 @@ bash -n "$project_dir/radio-fetch" "$project_dir/radio-player" \
   "$project_dir/tests/fixtures/"*
 luac -p "$project_dir/radio-status.lua"
 node "$project_dir/tests/model.test.mjs"
+node --test "$project_dir/tests/secure-v2.test.mjs"
 python3 "$project_dir/tests/proxy.test.py"
 ! rg -q 'playerStatusProcess|refreshPlayerStatus' \
   "$project_dir/BarWidget.qml" "$project_dir/RadioAtlas.qml"

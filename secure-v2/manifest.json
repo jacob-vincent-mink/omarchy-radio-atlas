@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "id": "akshar.radio-atlas",
+  "name": "Radio Atlas",
+  "version": "0.2.0-secure-preview",
+  "description": "Secure-runtime port preserving the interactive QML globe while moving authority behind typed providers.",
+  "runtime": {"apiVersion": 1, "qml": "ui/RadioAtlas.qml", "worker": []},
+  "surfaces": {
+    "atlas": {
+      "role": "desktop-overlay",
+      "maximumWidth": 1440,
+      "maximumHeight": 1000,
+      "maximumFramesPerSecond": 60,
+      "keyboardFocus": "after-gesture",
+      "lockScreenVisible": false,
+      "inputRegions": "dynamic-bounded"
+    },
+    "barWidget": {
+      "role": "bar-embedded",
+      "maximumWidth": 72,
+      "maximumHeight": 64,
+      "maximumFramesPerSecond": 30,
+      "defaultSection": "left"
+    }
+  },
+  "permissions": {
+    "required": [
+      {
+        "capability": "radio-browser.directory",
+        "operations": ["world", "world-more", "country", "search", "random"],
+        "reason": "Find public radio stations without exposing general network access"
+      },
+      {
+        "capability": "media.radio-playback",
+        "operations": ["play", "pause", "stop", "mute", "volume", "status"],
+        "reason": "Play the selected station through a host-owned media session"
+      },
+      {
+        "capability": "storage.private",
+        "quotaBytes": 1048576,
+        "itemBytes": 262144,
+        "reason": "Save bounded station caches, favorites, history, and volume"
+      }
+    ],
+    "optional": [
+      {
+        "capability": "lifecycle.screensaver",
+        "events": ["started"],
+        "reason": "Dismiss the atlas when the screensaver starts"
+      }
+    ]
+  }
+}
