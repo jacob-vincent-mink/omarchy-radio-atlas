@@ -81,6 +81,13 @@ test("interactive surfaces publish bounded authenticated input regions", () => {
   assert.match(barQml, /property var inputRegions:/);
 });
 
+test("private storage restoration validates the broker result envelope", () => {
+  assert.match(qml, /function decodeStoredValue\(value\)/);
+  assert.match(qml, /bytes\[0\] !== 1/);
+  assert.match(qml, /bytes\.length !== 8 \+ length/);
+  assert.match(qml, /decodeStoredValue\(storageCall\.value\)/);
+});
+
 test("migrated UI retains winner navigation and library behavior", () => {
   for (const feature of [
     "function search(text)", "function browseCountry(code, name)",

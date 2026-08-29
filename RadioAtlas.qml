@@ -91,6 +91,18 @@ Item {
     } catch (error) { return null }
   }
 
+  function decodeStoredValue(value) {
+    var bytes = null
+    if (value instanceof ArrayBuffer) bytes = new Uint8Array(value)
+    else if (ArrayBuffer.isView(value)) bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+    if (!bytes || bytes.length < 8 || bytes[0] !== 1 || bytes[1] !== 0
+        || bytes[2] !== 0 || bytes[3] !== 0) return null
+    var length = (((bytes[4] << 24) >>> 0) + (bytes[5] << 16)
+      + (bytes[6] << 8) + bytes[7]) >>> 0
+    if (length === 0 || length > 4096 || bytes.length !== 8 + length) return null
+    return decodeUtf8(bytes.subarray(8), 4096)
+  }
+
   function loadCountries() {
     var text = runtime.readPackagedText("assets/countries.json", 524288)
     if (!text) {
@@ -289,7 +301,9 @@ Item {
   function finishStorage() {
     if (!storageCall || !storageCall.finished || !storageCall.ok || pendingStorageAction !== "read") return
     try {
-      var state = JSON.parse(storageCall.utf8Text || "{}")
+      var encoded = decodeStoredValue(storageCall.value)
+      if (encoded === null) return
+      var state = JSON.parse(encoded)
       volume = Math.max(0, Math.min(100, Math.round(Number(state.volume || 70))))
       favoriteUuids = Array.isArray(state.favorites) ? state.favorites.slice(0, 100) : []
       recentUuids = Array.isArray(state.recent) ? state.recent.slice(0, 50) : []
