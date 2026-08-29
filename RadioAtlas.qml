@@ -88,29 +88,19 @@ Item {
   }
 
   function loadCountries() {
-    var request = new XMLHttpRequest()
-    request.onreadystatechange = function() {
-      if (request.readyState !== XMLHttpRequest.DONE) return
-      if (request.status !== 0 && request.status !== 200) {
-        root.errorText = "Map data could not be loaded"
-        return
-      }
-      var text = String(request.responseText || "")
-      if (text.length === 0 || text.length > 524288) {
-        root.errorText = "Map data exceeded its bundled limit"
-        return
-      }
-      try {
-        var collection = JSON.parse(text)
-        root.countries = Array.isArray(collection.features)
-          ? collection.features.slice(0, 512) : []
-      } catch (error) {
-        root.countries = []
-        root.errorText = "Map data could not be loaded"
-      }
+    var text = runtime.readPackagedText("assets/countries.json", 524288)
+    if (!text) {
+      root.errorText = "Map data could not be loaded"
+      return
     }
-    request.open("GET", Qt.resolvedUrl("assets/countries.json"))
-    request.send()
+    try {
+      var collection = JSON.parse(text)
+      root.countries = Array.isArray(collection.features)
+        ? collection.features.slice(0, 512) : []
+    } catch (error) {
+      root.countries = []
+      root.errorText = "Map data could not be loaded"
+    }
   }
 
   function finishFetch() {
