@@ -7,6 +7,7 @@ P.BarWidget {
   moduleName: "akshar.radio-atlas"
   width: button.width
   height: button.height
+  property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
 
   readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
   property var mediaCall: null

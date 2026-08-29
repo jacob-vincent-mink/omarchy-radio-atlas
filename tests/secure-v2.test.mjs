@@ -20,6 +20,8 @@ test("secure candidate declares bounded host-owned surfaces", () => {
   assert.equal(manifest.surfaces.atlas.role, "desktop-overlay");
   assert.equal(manifest.surfaces.atlas.keyboardFocus, "after-gesture");
   assert.equal(manifest.surfaces.atlas.lockScreenVisible, false);
+  assert.equal(manifest.surfaces.atlas.inputRegions, "dynamic-bounded");
+  assert.equal(manifest.surfaces.barWidget.inputRegions, "dynamic-bounded");
 });
 
 test("candidate asks for purpose-built authority, never ambient escape hatches", () => {
@@ -72,6 +74,11 @@ test("directory response is bounded and optional observation has a fallback", ()
   assert.match(qml, /runtime\.readPackagedText\("assets\/countries\.json", 524288\)/);
   assert.match(qml, /permissionSnapshot\["system\.observe"\]\.observe === true/);
   assert.match(qml, /Directory unavailable:/);
+});
+
+test("interactive surfaces publish bounded authenticated input regions", () => {
+  assert.match(qml, /property var inputRegions:/);
+  assert.match(barQml, /property var inputRegions:/);
 });
 
 test("migrated UI retains winner navigation and library behavior", () => {

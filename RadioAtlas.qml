@@ -8,6 +8,10 @@ Item {
   id: root
   width: 1180
   height: 760
+  property var inputRegions: [
+    {x: 24, y: 24, width: Math.max(0, sidebar.x - 48), height: Math.max(0, height - 48)},
+    {x: sidebar.x, y: 0, width: sidebar.width, height: height}
+  ]
 
   readonly property string fetchScope: '{"methods":["GET"],"origins":["https://all.api.radio-browser.info"]}'
   readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
@@ -273,13 +277,13 @@ Item {
     storageCall = runtime.invoke("storage_write", {key: "radio-state-v1",
       value: JSON.stringify({favorites: favoriteUuids,
         recent: recentUuids, volume: volume}),
-      quotaBytes: 1048576, itemBytes: 262144})
+      quotaBytes: 1048576, itemBytes: 4096})
   }
 
   function loadLocalState() {
     pendingStorageAction = "read"
     storageCall = runtime.invoke("storage_read", {key: "radio-state-v1",
-      quotaBytes: 1048576, itemBytes: 262144})
+      quotaBytes: 1048576, itemBytes: 4096})
   }
 
   function finishStorage() {
