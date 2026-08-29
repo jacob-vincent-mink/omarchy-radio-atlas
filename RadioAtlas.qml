@@ -40,6 +40,8 @@ Item {
     : mode === "recent" ? recent : results
   readonly property bool screensaverAwarenessAvailable:
     runtime.permissionState("system.observe", "observe") === "granted"
+  readonly property bool directoryAvailable:
+    runtime.permissionState("network.fetch", "fetch") === "granted"
 
   function decodeUtf8(value, maximumBytes) {
     if (typeof value === "string")
@@ -101,6 +103,12 @@ Item {
 
   function refreshWorld() {
     if (fetchCall && !fetchCall.finished) return
+    if (!directoryAvailable) {
+      fetching = false
+      errorText = "Radio directory permission is not granted"
+      statusText = "Radio Atlas — directory unavailable"
+      return
+    }
     fetching = true
     errorText = ""
     statusText = "Loading Radio Browser…"
@@ -270,6 +278,13 @@ Item {
       if (call === root.fetchCall) root.finishFetch()
       else if (call === root.mediaCall) root.finishMedia()
       else if (call === root.storageCall) root.finishStorage()
+    }
+    function onPermissionsChanged() {
+      if (!root.directoryAvailable) {
+        root.fetching = false
+        root.errorText = "Radio directory permission was revoked"
+        root.statusText = "Radio Atlas — directory unavailable"
+      }
     }
   }
 
