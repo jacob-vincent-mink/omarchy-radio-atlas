@@ -1,34 +1,29 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "akshar.radio-atlas",
   "name": "Radio Atlas",
-  "version": "0.1.4",
-  "author": "Akshar Patel",
-  "license": "MIT",
-  "description": "Explore live radio on a rotatable globe and play stations through Omarchy's media controls.",
-  "homepage": "https://github.com/AksharP5/omarchy-radio-atlas",
-  "repository": "https://github.com/AksharP5/omarchy-radio-atlas",
-  "keywords": [
-    "radio",
-    "world",
-    "globe",
-    "music",
-    "mpris"
-  ],
-  "kinds": [
-    "overlay",
-    "bar-widget"
-  ],
-  "keepLoaded": true,
-  "entryPoints": {
-    "overlay": "RadioAtlas.qml",
-    "barWidget": "BarWidget.qml"
+  "version": "0.2.0-secure-preview",
+  "description": "Secure-runtime port preserving the interactive QML globe while moving authority behind typed providers.",
+  "runtime": {
+    "apiVersion": 1,
+    "qml": "RadioAtlas.qml",
+    "surfaceQml": {
+      "atlas": "RadioAtlas.qml",
+      "barWidget": "BarWidget.qml"
+    }
   },
-  "barWidget": {
-    "displayName": "Radio Atlas",
-    "description": "Open the world radio globe",
-    "category": "Media",
-    "allowMultiple": false,
-    "defaultSection": "left"
+  "surfaces": {
+    "atlas": {"role": "desktop-overlay", "maximumWidth": 1440, "maximumHeight": 1000, "maximumFramesPerSecond": 60, "keyboardFocus": "after-gesture", "lockScreenVisible": false, "inputRegions": "dynamic-bounded"},
+    "barWidget": {"role": "bar-embedded", "maximumWidth": 72, "maximumHeight": 64, "maximumFramesPerSecond": 30, "defaultSection": "left", "inputRegions": "dynamic-bounded"}
+  },
+  "permissions": {
+    "required": [
+      {"capability": "network.fetch", "definitionGeneration": 1, "definitionDigest": "1b1d34c104f5850ef21c6b16c6d71daa19fe3b7a35f38ab5892d640faf9f5874", "operations": ["fetch"], "origins": ["https://all.api.radio-browser.info"], "methods": ["GET"], "reason": "Find public radio stations without exposing general network access"},
+      {"capability": "media.play-stream", "definitionGeneration": 1, "definitionDigest": "2c0698cd289b084479aa0992cd11ec191b651af0f837e1030aabfed3fdc4e4c9", "operations": ["control", "play"], "sourceHandles": ["network.fetch"], "controls": ["pause", "stop", "mute", "volume", "status"], "reason": "Play the selected station through a host-owned media session"},
+      {"capability": "storage.private", "quotaBytes": 1048576, "itemBytes": 4096, "reason": "Save bounded favorites, history, and volume"}
+    ],
+    "optional": [
+      {"capability": "system.observe", "definitionGeneration": 1, "definitionDigest": "dc22d694f498eeb21af02a9e6d0313b20fd2a0e20db5cab64c08630999cfa84c", "operations": ["observe"], "datasets": ["screensaver.state"], "reason": "Dismiss the atlas when the screensaver starts"}
+    ]
   }
 }

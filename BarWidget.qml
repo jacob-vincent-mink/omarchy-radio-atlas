@@ -1,156 +1,91 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
-import qs.Commons
-import qs.Ui
+import QtQml as Qml
+import Omarchy.PluginPresentation 1.0 as P
 
-BarWidget {
+P.BarWidget {
   id: root
-
   moduleName: "akshar.radio-atlas"
+  width: button.width
+  height: button.height
+  property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
 
-  property bool playerRunning: false
-  property bool playerPaused: false
-  property bool playerMuted: false
-  property int playerVolume: 70
-  property int reportedVolume: 70
+  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
+  property var mediaCall: null
+  property bool playing: false
+  property bool paused: false
+  property bool muted: false
+  property int volume: 70
   property int pendingVolume: -1
   property string playerTitle: ""
-  property bool statusReady: false
-  readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
-  readonly property string statusPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas/status.json"
+  property string statusText: "Radio Atlas"
+  signal openRequested(string action)
 
-  function singleLineText(value, limit) {
-    return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, limit)
+  function control(action, value) {
+    var payload = {control: action}
+    if (action === "volume") payload.value = Math.max(0, Math.min(100, Math.round(Number(value))))
+    mediaCall = runtime.invoke("control", {demandScope: mediaScope, payload: payload})
   }
 
-  function safeTooltipText(value) {
-    return root.singleLineText(value, 160).replace(/</g, "‹").replace(/>/g, "›")
-  }
-
-  function applyPlayerState(raw) {
-    try {
-      if (typeof raw !== "string" || raw.length > 65536) return
-      var state = JSON.parse(raw || "{}")
-      root.playerRunning = state.running === true
-      root.playerPaused = state.paused === true
-      root.playerMuted = state.muted === true
-      var nextVolume = Math.round(Number(state.volume === undefined ? 70 : state.volume))
-      root.reportedVolume = isFinite(nextVolume)
-        ? Math.max(0, Math.min(100, nextVolume)) : 70
-      if (root.pendingVolume < 0) root.playerVolume = root.reportedVolume
-      root.playerTitle = root.singleLineText(
-        state.title || (state.station && state.station.name) || "", 160)
-    } catch (error) {
+  function applyPlayerState() {
+    if (!mediaCall || !mediaCall.finished) return
+    if (!mediaCall.ok) {
+      statusText = "Radio unavailable"
+      playing = false
       return
     }
-  }
-
-  function runPlayerAction(action) {
-    if (actionProcess.running) return
-    actionProcess.command = [root.playerPath, action]
-    actionProcess.running = true
+    var state = ({})
+    try { state = JSON.parse(mediaCall.utf8Text || "{}") } catch (error) {}
+    playing = state.running === true
+    paused = state.paused === true
+    muted = state.muted === true
+    if (state.volume !== undefined)
+      volume = Math.max(0, Math.min(100, Math.round(Number(state.volume))))
+    playerTitle = String(state.title || "").replace(/[\r\n\t]+/g, " ").slice(0, 160)
+    statusText = playing
+      ? (paused ? "Radio paused: " : "Playing: ") + (playerTitle || "Radio Atlas")
+        + "  ·  " + (muted ? "muted" : volume + "%")
+      : "Open Radio Atlas"
   }
 
   function changeVolume(delta) {
-    var current = pendingVolume >= 0 ? pendingVolume : playerVolume
-    pendingVolume = Math.max(0, Math.min(100, current + (delta > 0 ? 5 : -5)))
-    playerVolume = pendingVolume
-    flushVolume()
+    var next = Math.max(0, Math.min(100, volume + (delta > 0 ? 5 : -5)))
+    volume = next
+    control("volume", next)
   }
 
-  function flushVolume() {
-    if (volumeProcess.running || pendingVolume < 0) return
-    volumeProcess.submittedVolume = pendingVolume
-    volumeProcess.command = [playerPath, "volume", String(pendingVolume)]
-    volumeProcess.running = true
-  }
-
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
-
-  FileView {
-    path: root.statusReady ? root.statusPath : ""
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.applyPlayerState(text())
-    onFileChanged: reload()
-  }
-
-  Process {
-    id: statusInitProcess
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.statusReady = true
+  Qml.Connections {
+    target: root.mediaCall
+    function onFinishedChanged() {
+      if (!root.mediaCall || !root.mediaCall.finished) return
+      root.applyPlayerState()
     }
   }
 
-  Process {
-    id: actionProcess
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.statusReady = true
-    }
-  }
+  Qml.Component.onCompleted: root.control("status")
 
-  Process {
-    id: volumeProcess
-    property int submittedVolume: -1
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode !== 0) {
-        if (root.pendingVolume === submittedVolume) {
-          root.pendingVolume = -1
-          root.playerVolume = root.reportedVolume
-        } else {
-          Qt.callLater(root.flushVolume)
-        }
-        return
-      }
-
-      root.statusReady = true
-      root.reportedVolume = submittedVolume
-      if (root.pendingVolume === submittedVolume) {
-        root.pendingVolume = -1
-        root.playerVolume = submittedVolume
-        return
-      }
-      Qt.callLater(root.flushVolume)
-    }
-  }
-
-  Component.onCompleted: {
-    statusInitProcess.command = [playerPath, "status"]
-    statusInitProcess.running = true
-  }
-
-  WidgetButton {
+  P.WidgetButton {
     id: button
-    anchors.fill: parent
-    bar: root.bar
-    text: "\uf0ac"
-    active: root.playerRunning && !root.playerPaused
-    tooltipText: root.playerRunning
-      ? (root.playerPaused ? "Radio paused: " : "Playing: ") + root.safeTooltipText(root.playerTitle)
-        + "  ·  " + (root.playerMuted ? "muted" : root.playerVolume + "%")
-      : "Open Radio Atlas"
+    width: 44
+    height: 36
+    tooltipText: root.statusText
+    dimmed: !root.playing || root.paused
 
-    onPressed: function(mouseButton) {
-      if (!root.bar) return
-      if (mouseButton === Qt.RightButton) {
-        root.runPlayerAction("stop")
-        return
-      }
-      if (mouseButton === Qt.MiddleButton) {
-        root.bar.run("omarchy-shell shell summon akshar.radio-atlas '{\"action\":\"random\"}'")
-        return
-      }
-      root.bar.run("omarchy-shell shell toggle akshar.radio-atlas")
+    Text {
+      anchors.centerIn: parent
+      text: "\uf0ac"
+      color: P.Color.foreground
+      font.family: P.Style.font.family
+      font.pixelSize: P.Style.font.icon
     }
 
-    onWheelMoved: function(delta) {
-      root.changeVolume(delta)
+    onPressed: function(buttonCode) {
+      if (buttonCode === Qt.RightButton) root.control("stop")
+      else root.openRequested(buttonCode === Qt.MiddleButton ? "random" : "toggle")
+    }
+
+    WheelHandler {
+      target: null
+      onWheel: function(event) { root.changeVolume(event.angleDelta.y) }
     }
   }
 }
