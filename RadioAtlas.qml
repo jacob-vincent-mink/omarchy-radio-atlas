@@ -45,6 +45,10 @@ Item {
     : mode === "recent" ? recent : results
   readonly property bool directoryAvailable:
     runtime.hasPermission("network.fetch", "fetch")
+  readonly property bool canPlay:
+    runtime.hasPermission("media.play-stream", "play")
+  readonly property bool canControl:
+    runtime.hasPermission("media.play-stream", "control")
   readonly property color background: "#090a0c"
   readonly property color foreground: "#f2f4f8"
   readonly property color accent: "#5e81ac"
@@ -190,6 +194,10 @@ Item {
   }
 
   function tuneRandom() {
+    if (!canPlay) {
+      errorText = "Playback permission is not granted"
+      return false
+    }
     var pool = displayStations.length > 0 ? displayStations : stations
     if (pool.length === 0) return false
     var index = Math.floor(Math.random() * pool.length)
@@ -222,7 +230,10 @@ Item {
   }
 
   function play(station) {
-    if (!station || !station.uuid || !station.playbackHandle) return false
+    if (!canPlay || !station || !station.uuid || !station.playbackHandle) {
+      if (!canPlay) errorText = "Playback permission is not granted"
+      return false
+    }
     pendingPlayStation = station
     mediaCall = runtime.invoke("media.play-stream", "play", {demandScope: mediaScope,
       payload: {sourceHandle: station.playbackHandle}})
@@ -231,15 +242,20 @@ Item {
   }
 
   function setVolume(nextVolume) {
+    if (!canControl) return false
     var bounded = Math.max(0, Math.min(100, Math.round(Number(nextVolume))))
     var call = runtime.invoke("media.play-stream", "control", {demandScope: mediaScope,
       payload: {control: "volume", value: bounded}})
     if (call && call.finished && call.ok) volume = bounded
+    return true
   }
 
   function controlPlayer(control, value) {
+    if (!canControl) return false
     mediaCall = runtime.invoke("media.play-stream", "control", {demandScope: mediaScope,
       payload: control === "volume" ? {control: control, value: value} : {control: control}})
+    if (mediaCall && mediaCall.finished) finishMedia()
+    return true
   }
 
   function stationByUuid(uuid) {
@@ -314,6 +330,7 @@ Item {
     runtimeStarted = true
     loadLocalState()
     refreshWorld()
+    if (canControl) controlPlayer("status")
   }
 
   function open() {
@@ -397,7 +414,7 @@ Item {
           QQC.Button { text: "World"; onClicked: root.showWorld() }
           QQC.Button { text: "Favorites"; onClicked: root.showFavorites() }
           QQC.Button { text: "Recent"; onClicked: root.showRecent() }
-          QQC.Button { text: "Random"; onClicked: root.tuneRandom() }
+          QQC.Button { text: "Random"; enabled: root.canPlay; onClicked: root.tuneRandom() }
         }
 
         Text {
@@ -454,13 +471,14 @@ Item {
 
         Row {
           spacing: 8
-          QQC.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing; onClicked: root.controlPlayer("pause") }
-          QQC.Button { text: "Stop"; enabled: root.playing; onClicked: root.controlPlayer("stop") }
-          QQC.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing; onClicked: root.controlPlayer("mute") }
+          QQC.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing && root.canControl; onClicked: root.controlPlayer("pause") }
+          QQC.Button { text: "Stop"; enabled: root.playing && root.canControl; onClicked: root.controlPlayer("stop") }
+          QQC.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing && root.canControl; onClicked: root.controlPlayer("mute") }
           QQC.Button { text: root.isFavorite(root.selectedStation && root.selectedStation.uuid) ? "★" : "☆"; enabled: !!root.selectedStation; onClicked: root.toggleFavorite(root.selectedStation) }
         }
 
         QQC.Slider {
+          enabled: root.canControl
           width: parent.width
           height: 32
           from: 0

@@ -117,6 +117,23 @@ test("permission state is immutable for the generation", () => {
   assert.match(qml, /function onBrokerReadyChanged\(\) \{ root\.startRuntime\(\) \}/);
 });
 
+test("partial media grants expose only their permitted behavior", () => {
+  assert.match(qml, /readonly property bool canPlay:\s*runtime\.hasPermission\("media\.play-stream", "play"\)/);
+  assert.match(qml, /readonly property bool canControl:\s*runtime\.hasPermission\("media\.play-stream", "control"\)/);
+  assert.match(qml, /function play\(station\) \{\s*if \(!canPlay/);
+  assert.match(qml, /function tuneRandom\(\) \{\s*if \(!canPlay/);
+  assert.match(qml, /function setVolume\(nextVolume\) \{\s*if \(!canControl\) return false/);
+  assert.match(qml, /function controlPlayer\(control, value\) \{\s*if \(!canControl\) return false/);
+  assert.match(qml, /if \(canControl\) controlPlayer\("status"\)/);
+  assert.match(qml, /text: "Random"; enabled: root\.canPlay/);
+  assert.match(qml, /enabled: root\.playing && root\.canControl/);
+  assert.match(qml, /QQC\.Slider \{\s*enabled: root\.canControl/);
+
+  assert.match(barQml, /readonly property bool canControl:\s*runtime\.hasPermission\("media\.play-stream", "control"\)/);
+  assert.match(barQml, /function control\(action, value\) \{\s*if \(!canControl\)/);
+  assert.match(barQml, /WheelHandler \{\s*enabled: root\.canControl/);
+});
+
 test("bar surface intents consume the authenticated press gesture", () => {
   assert.match(barQml, /onPressed: function\(mouse\)/);
   assert.match(barQml, /runtime\.requestSurfaceIntent\("atlas", "toggle"\)/);

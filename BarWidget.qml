@@ -18,11 +18,18 @@ Item {
   property string playerTitle: ""
   property string statusText: "Radio Atlas"
   property bool runtimeStarted: false
+  readonly property bool canControl:
+    runtime.hasPermission("media.play-stream", "control")
 
   function control(action, value) {
+    if (!canControl) {
+      statusText = "Radio controls unavailable"
+      return false
+    }
     var payload = {control: action}
     if (action === "volume") payload.value = Math.max(0, Math.min(100, Math.round(Number(value))))
     mediaCall = runtime.invoke("media.play-stream", "control", {demandScope: mediaScope, payload: payload})
+    return true
   }
 
   function applyPlayerState() {
@@ -101,6 +108,7 @@ Item {
     }
 
     WheelHandler {
+      enabled: root.canControl
       target: null
       onWheel: function(event) { root.changeVolume(event.angleDelta.y) }
     }
