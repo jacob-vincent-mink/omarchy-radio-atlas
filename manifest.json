@@ -22,8 +22,6 @@
       {"capability": "media.play-stream", "definitionGeneration": 1, "definitionDigest": "2c0698cd289b084479aa0992cd11ec191b651af0f837e1030aabfed3fdc4e4c9", "operations": ["control", "play"], "sourceHandles": ["network.fetch"], "controls": ["pause", "stop", "mute", "volume", "status"], "reason": "Play the selected station through a host-owned media session"},
       {"capability": "storage.private", "quotaBytes": 1048576, "itemBytes": 4096, "reason": "Save bounded favorites, history, and volume"}
     ],
-    "optional": [
-      {"capability": "system.observe", "definitionGeneration": 1, "definitionDigest": "dc22d694f498eeb21af02a9e6d0313b20fd2a0e20db5cab64c08630999cfa84c", "operations": ["observe"], "datasets": ["screensaver.state"], "reason": "Dismiss the atlas when the screensaver starts"}
-    ]
+    "optional": []
   }
 }

@@ -25,10 +25,11 @@ test("secure candidate declares bounded host-owned surfaces", () => {
 });
 
 test("candidate asks for purpose-built authority, never ambient escape hatches", () => {
+  assert.deepEqual(manifest.permissions.optional, []);
   const capabilities = [...manifest.permissions.required, ...manifest.permissions.optional]
     .map(request => request.capability);
   assert.deepEqual(capabilities, [
-    "network.fetch", "media.play-stream", "storage.private", "system.observe",
+    "network.fetch", "media.play-stream", "storage.private",
   ]);
   for (const forbidden of ["command.invoke", "http.request", "filesystem", "dbus", "wayland"])
     assert.equal(capabilities.includes(forbidden), false);
@@ -59,6 +60,31 @@ test("dynamic requests pin trusted definitions and operations", () => {
   }
 });
 
+test("QML operations and demand scopes are a subset of the manifest request", () => {
+  const requests = new Map(manifest.permissions.required.map(request => [request.capability, request]));
+  const fetch = requests.get("network.fetch");
+  const media = requests.get("media.play-stream");
+  const fetchScope = JSON.parse(qml.match(/readonly property string fetchScope: '([^']+)'/)[1]);
+  const mediaScope = JSON.parse(qml.match(/readonly property string mediaScope: '([^']+)'/)[1]);
+  const barMediaScope = JSON.parse(barQml.match(/readonly property string mediaScope: '([^']+)'/)[1]);
+
+  assert.deepEqual(fetchScope, {methods: fetch.methods, origins: fetch.origins});
+  assert.deepEqual(mediaScope, {controls: media.controls, sourceHandles: media.sourceHandles});
+  assert.deepEqual(barMediaScope, mediaScope);
+  assert.deepEqual([...new Set([...qml.matchAll(/runtime\.invoke\("(fetch|play|control)"/g)]
+    .map(match => match[1]))].sort(), [...fetch.operations, ...media.operations].sort());
+  assert.match(qml, /runtime\.invoke\("fetch", \{demandScope: fetchScope,/);
+  assert.match(qml, /runtime\.invoke\("play", \{demandScope: mediaScope,/);
+  assert.match(qml, /runtime\.invoke\("control", \{demandScope: mediaScope,/);
+  assert.match(barQml, /runtime\.invoke\("control", \{demandScope: mediaScope,/);
+
+  const allInvokes = [...qml.matchAll(/runtime\.invoke\("([^"]+)"/g),
+    ...barQml.matchAll(/runtime\.invoke\("([^"]+)"/g)].map(match => match[1]);
+  const allowed = new Set(["fetch", "play", "control", "storage_read", "storage_write"]);
+  for (const operation of allInvokes) assert.equal(allowed.has(operation), true, operation);
+  assert.equal(requests.has("storage.private"), true);
+});
+
 test("port keeps the product station model and globe in their original files", () => {
   assert.match(qml, /import "RadioModel\.js" as RadioModel/);
   assert.match(qml, /Globe \{/);
@@ -69,12 +95,13 @@ test("port keeps the product station model and globe in their original files", (
   assert.equal(fs.existsSync(path.join(root, "secure-v2/ui/RadioModel.js")), false);
 });
 
-test("directory response is bounded and optional observation has a fallback", () => {
+test("directory response is bounded and no observation API is implied", () => {
   assert.match(qml, /result\.stations\.length > 64/);
   assert.match(qml, /runtime\.readPackagedText\("assets\/countries\.json", 524288\)/);
-  assert.match(qml, /permissionSnapshot\["system\.observe"\]\.operations\.observe === "granted"/);
   assert.match(qml, /permissionSnapshot\["network\.fetch"\]\.operations\.fetch === "granted"/);
   assert.match(qml, /Directory unavailable:/);
+  assert.equal(JSON.stringify(manifest).includes("system.observe"), false);
+  assert.equal(qml.includes("screensaver"), false);
 });
 
 test("permission state is immutable for the generation", () => {
@@ -93,6 +120,7 @@ test("bar surface intents consume the authenticated press gesture", () => {
   assert.doesNotMatch(barQml, /on(?:Clicked|Released|Tapped)[\s\S]{0,160}requestSurfaceIntent/);
   const intents = [...barQml.matchAll(/requestSurfaceIntent\("[^"]+", "([^"]+)"\)/g)];
   assert.deepEqual(intents.map(match => match[1]), ["toggle"]);
+  assert.equal(Object.hasOwn(manifest.surfaces, "atlas"), true);
 });
 
 test("interactive surfaces publish bounded authenticated input regions", () => {
@@ -107,7 +135,7 @@ test("private storage restoration validates the broker result envelope", () => {
   assert.match(qml, /decodeStoredValue\(storageCall\.value\)/);
 });
 
-test("migrated UI retains winner navigation and library behavior", () => {
+test("migrated UI retains a bounded subset of navigation and library code", () => {
   for (const feature of [
     "function search(text)", "function browseCountry(code, name)",
     "function showFavorites()", "function showRecent()", "function tuneRandom()",

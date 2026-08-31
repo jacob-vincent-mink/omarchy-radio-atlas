@@ -44,9 +44,6 @@ Item {
   readonly property var displayStations: mode === "favorites" ? favorites
     : mode === "recent" ? recent : results
   readonly property var permissionSnapshot: runtime.permissions
-  readonly property bool screensaverAwarenessAvailable:
-    !!permissionSnapshot["system.observe"]
-      && permissionSnapshot["system.observe"].operations.observe === "granted"
   readonly property bool directoryAvailable:
     !!permissionSnapshot["network.fetch"]
       && permissionSnapshot["network.fetch"].operations.fetch === "granted"
