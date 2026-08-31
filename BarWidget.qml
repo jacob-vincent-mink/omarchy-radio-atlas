@@ -1,10 +1,9 @@
 import QtQuick
+import QtQuick.Controls as QQC
 import QtQml as Qml
-import Omarchy.PluginPresentation 1.0 as P
 
-P.BarWidget {
+Item {
   id: root
-  moduleName: "akshar.radio-atlas"
   width: button.width
   height: button.height
   property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
@@ -18,7 +17,7 @@ P.BarWidget {
   property int pendingVolume: -1
   property string playerTitle: ""
   property string statusText: "Radio Atlas"
-  signal openRequested(string action)
+  property bool runtimeStarted: false
 
   function control(action, value) {
     var payload = {control: action}
@@ -53,34 +52,52 @@ P.BarWidget {
     control("volume", next)
   }
 
-  Qml.Connections {
-    target: root.mediaCall
-    function onFinishedChanged() {
-      if (!root.mediaCall || !root.mediaCall.finished) return
-      root.applyPlayerState()
-    }
+  function startRuntime() {
+    if (runtimeStarted || !runtime.brokerReady) return
+    runtimeStarted = true
+    control("status")
   }
 
-  Qml.Component.onCompleted: root.control("status")
+  function open() { startRuntime() }
 
-  P.WidgetButton {
+  Qml.Connections {
+    target: runtime
+    function onCallFinished(call) {
+      if (call === root.mediaCall) root.applyPlayerState()
+    }
+    function onBrokerReadyChanged() { root.startRuntime() }
+  }
+
+  Qml.Component.onCompleted: root.startRuntime()
+
+  Rectangle {
     id: button
     width: 44
     height: 36
-    tooltipText: root.statusText
-    dimmed: !root.playing || root.paused
+    radius: 8
+    color: pointer.containsMouse ? "#243142" : "transparent"
+    border.color: pointer.containsMouse ? "#3b526c" : "transparent"
+    opacity: !root.playing || root.paused ? 0.6 : 1
+
+    QQC.ToolTip.visible: pointer.containsMouse
+    QQC.ToolTip.text: root.statusText
 
     Text {
       anchors.centerIn: parent
       text: "\uf0ac"
-      color: P.Color.foreground
-      font.family: P.Style.font.family
-      font.pixelSize: P.Style.font.icon
+      color: "#f2f4f8"
+      font.pixelSize: 18
     }
 
-    onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton) root.control("stop")
-      else root.openRequested(buttonCode === Qt.MiddleButton ? "random" : "toggle")
+    MouseArea {
+      id: pointer
+      anchors.fill: parent
+      hoverEnabled: true
+      acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+      onPressed: function(mouse) {
+        if (mouse.button === Qt.RightButton) root.control("stop")
+        else runtime.requestSurfaceIntent("atlas", "toggle")
+      }
     }
 
     WheelHandler {

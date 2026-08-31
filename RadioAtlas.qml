@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQml as Qml
-import Omarchy.PluginPresentation 1.0 as P
 import "RadioModel.js" as RadioModel
 
 Item {
@@ -41,21 +40,22 @@ Item {
   property string playerTitle: ""
   property var storageCall: null
   property string pendingStorageAction: ""
+  property bool runtimeStarted: false
   readonly property var displayStations: mode === "favorites" ? favorites
     : mode === "recent" ? recent : results
   readonly property var permissionSnapshot: runtime.permissions
   readonly property bool screensaverAwarenessAvailable:
     !!permissionSnapshot["system.observe"]
-      && permissionSnapshot["system.observe"].observe === true
+      && permissionSnapshot["system.observe"].operations.observe === "granted"
   readonly property bool directoryAvailable:
     !!permissionSnapshot["network.fetch"]
-      && permissionSnapshot["network.fetch"].fetch === true
+      && permissionSnapshot["network.fetch"].operations.fetch === "granted"
   readonly property color background: "#090a0c"
-  readonly property color foreground: P.Color.foreground
-  readonly property color accent: P.Color.accent
-  readonly property color urgent: P.Color.urgent
-  readonly property color dim: P.Color.alpha(foreground, 0.56)
-  readonly property color faint: P.Color.alpha(foreground, 0.12)
+  readonly property color foreground: "#f2f4f8"
+  readonly property color accent: "#5e81ac"
+  readonly property color urgent: "#bf616a"
+  readonly property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.56)
+  readonly property color faint: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.12)
 
   function decodeUtf8(value, maximumBytes) {
     if (typeof value === "string")
@@ -314,7 +314,19 @@ Item {
 
   function stepForTest() { refreshWorld() }
 
-  Qml.Component.onCompleted: { loadCountries(); loadLocalState(); refreshWorld() }
+  function startRuntime() {
+    if (runtimeStarted || !runtime.brokerReady) return
+    runtimeStarted = true
+    loadLocalState()
+    refreshWorld()
+  }
+
+  function open() {
+    startRuntime()
+    if (runtimeStarted && stations.length === 0 && !fetching) refreshWorld()
+  }
+
+  Qml.Component.onCompleted: { loadCountries(); startRuntime() }
 
   Qml.Connections {
     target: runtime
@@ -323,13 +335,7 @@ Item {
       else if (call === root.mediaCall) root.finishMedia()
       else if (call === root.storageCall) root.finishStorage()
     }
-    function onPermissionsChanged() {
-      if (runtime.permissionState("network.fetch", "fetch") !== "granted") {
-        root.fetching = false
-        root.errorText = "Radio directory permission was revoked"
-        root.statusText = "Radio Atlas — directory unavailable"
-      }
-    }
+    function onBrokerReadyChanged() { root.startRuntime() }
   }
 
   Rectangle {
@@ -373,7 +379,7 @@ Item {
       anchors.right: parent.right
       anchors.bottom: parent.bottom
       width: Math.min(390, parent.width * 0.38)
-      color: P.Color.alpha(root.background, 0.96)
+      color: Qt.rgba(root.background.r, root.background.g, root.background.b, 0.96)
       border.color: root.faint
 
       Column {
@@ -381,7 +387,7 @@ Item {
         anchors.margins: 18
         spacing: 10
 
-        Text { text: "RADIO ATLAS"; color: root.foreground; font.family: P.Style.font.family; font.pixelSize: 24; font.bold: true }
+        Text { text: "RADIO ATLAS"; color: root.foreground; font.pixelSize: 24; font.bold: true }
 
         QQC.TextField {
           width: parent.width
@@ -393,10 +399,10 @@ Item {
 
         Row {
           spacing: 6
-          P.Button { text: "World"; onClicked: root.showWorld() }
-          P.Button { text: "Favorites"; onClicked: root.showFavorites() }
-          P.Button { text: "Recent"; onClicked: root.showRecent() }
-          P.Button { text: "Random"; onClicked: root.tuneRandom() }
+          QQC.Button { text: "World"; onClicked: root.showWorld() }
+          QQC.Button { text: "Favorites"; onClicked: root.showFavorites() }
+          QQC.Button { text: "Recent"; onClicked: root.showRecent() }
+          QQC.Button { text: "Random"; onClicked: root.tuneRandom() }
         }
 
         Text {
@@ -419,7 +425,8 @@ Item {
             width: stationList.width
             height: 48
             radius: 7
-              color: root.selectedStation && root.selectedStation.uuid === modelData.uuid ? P.Color.alpha(root.accent, 0.22) : "transparent"
+            color: root.selectedStation && root.selectedStation.uuid === modelData.uuid
+              ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.22) : "transparent"
             Text {
               anchors.left: parent.left
               anchors.right: favorite.left
@@ -427,7 +434,6 @@ Item {
               anchors.leftMargin: 10
               text: modelData.name + (modelData.countryCode ? "  ·  " + modelData.countryCode : "")
               color: root.foreground
-              font.family: P.Style.font.family
               elide: Text.ElideRight
             }
             Text {
@@ -453,21 +459,22 @@ Item {
 
         Row {
           spacing: 8
-          P.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing; onClicked: root.controlPlayer("pause") }
-          P.Button { text: "Stop"; enabled: root.playing; onClicked: root.controlPlayer("stop") }
-          P.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing; onClicked: root.controlPlayer("mute") }
-          P.Button { text: root.isFavorite(root.selectedStation && root.selectedStation.uuid) ? "★" : "☆"; enabled: !!root.selectedStation; onClicked: root.toggleFavorite(root.selectedStation) }
+          QQC.Button { text: root.paused ? "Resume" : "Pause"; enabled: root.playing; onClicked: root.controlPlayer("pause") }
+          QQC.Button { text: "Stop"; enabled: root.playing; onClicked: root.controlPlayer("stop") }
+          QQC.Button { text: root.muted ? "Unmute" : "Mute"; enabled: root.playing; onClicked: root.controlPlayer("mute") }
+          QQC.Button { text: root.isFavorite(root.selectedStation && root.selectedStation.uuid) ? "★" : "☆"; enabled: !!root.selectedStation; onClicked: root.toggleFavorite(root.selectedStation) }
         }
 
-        P.PanelSlider {
+        QQC.Slider {
           width: parent.width
           height: 32
-          minimum: 0
-          maximum: 100
+          from: 0
+          to: 100
           value: root.volume
-          integer: true
-          onReleased: function(nextValue) {
-            root.volume = Math.round(nextValue)
+          stepSize: 1
+          onPressedChanged: function() {
+            if (pressed) return
+            root.volume = Math.round(value)
             root.setVolume(root.volume)
           }
         }
@@ -479,7 +486,7 @@ Item {
       anchors.right: sidebar.left
       anchors.bottom: parent.bottom
       height: 72
-      color: P.Color.alpha(root.background, 0.9)
+      color: Qt.rgba(root.background.r, root.background.g, root.background.b, 0.9)
 
       Text {
         anchors.left: parent.left
@@ -489,7 +496,6 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: root.errorText || root.statusText
         color: root.errorText ? root.urgent : root.foreground
-        font.family: P.Style.font.family
         font.pixelSize: 18
         textFormat: Text.PlainText
         elide: Text.ElideRight

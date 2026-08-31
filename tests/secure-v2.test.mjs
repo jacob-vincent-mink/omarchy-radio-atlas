@@ -37,7 +37,7 @@ test("candidate asks for purpose-built authority, never ambient escape hatches",
 test("isolated QML has no ambient Quickshell, process, filesystem, or compositor API", () => {
   for (const source of [qml, barQml]) for (const forbidden of [
     "import Quickshell", "Process {", "FileView {", "PanelWindow {",
-    "Hyprland", "WlrLayershell", "Quickshell.env",
+    "Hyprland", "WlrLayershell", "Quickshell.env", "Omarchy.PluginPresentation",
   ]) assert.equal(source.includes(forbidden), false, forbidden);
   assert.match(qml, /runtime\.invoke\("fetch"/);
   assert.match(qml, /runtime\.invoke\("play"/);
@@ -72,8 +72,27 @@ test("port keeps the product station model and globe in their original files", (
 test("directory response is bounded and optional observation has a fallback", () => {
   assert.match(qml, /result\.stations\.length > 64/);
   assert.match(qml, /runtime\.readPackagedText\("assets\/countries\.json", 524288\)/);
-  assert.match(qml, /permissionSnapshot\["system\.observe"\]\.observe === true/);
+  assert.match(qml, /permissionSnapshot\["system\.observe"\]\.operations\.observe === "granted"/);
+  assert.match(qml, /permissionSnapshot\["network\.fetch"\]\.operations\.fetch === "granted"/);
   assert.match(qml, /Directory unavailable:/);
+});
+
+test("permission state is immutable for the generation", () => {
+  for (const source of [qml, barQml]) {
+    assert.equal(source.includes("onPermissionsChanged"), false);
+    assert.equal(source.includes("permissionState("), false);
+  }
+  assert.match(qml, /readonly property var permissionSnapshot: runtime\.permissions/);
+  assert.match(qml, /function onBrokerReadyChanged\(\) \{ root\.startRuntime\(\) \}/);
+});
+
+test("bar surface intents consume the authenticated press gesture", () => {
+  assert.match(barQml, /onPressed: function\(mouse\)/);
+  assert.match(barQml, /runtime\.requestSurfaceIntent\("atlas", "toggle"\)/);
+  assert.equal(barQml.includes("openRequested"), false);
+  assert.doesNotMatch(barQml, /on(?:Clicked|Released|Tapped)[\s\S]{0,160}requestSurfaceIntent/);
+  const intents = [...barQml.matchAll(/requestSurfaceIntent\("[^"]+", "([^"]+)"\)/g)];
+  assert.deepEqual(intents.map(match => match[1]), ["toggle"]);
 });
 
 test("interactive surfaces publish bounded authenticated input regions", () => {
@@ -94,14 +113,12 @@ test("migrated UI retains winner navigation and library behavior", () => {
     "function showFavorites()", "function showRecent()", "function tuneRandom()",
     "function moveSelection(delta)", "function toggleFavorite(station)",
     "function recordPlayed(station)", "Keys.onPressed", "QQC.TextField",
-    "ListView {", "P.PanelSlider",
+    "ListView {", "QQC.Slider", "function open()",
   ]) assert.ok(qml.includes(feature), feature);
   assert.match(qml, /activeCountryCode: root\.activeCountryCode/);
-  assert.match(qml, /permissionState\("network\.fetch", "fetch"\)/);
-  assert.match(qml, /Radio directory permission was revoked/);
-  assert.match(qml, /import Omarchy\.PluginPresentation 1\.0 as P/);
-  assert.match(barQml, /P\.BarWidget \{/);
-  assert.match(barQml, /P\.WidgetButton \{/);
+  assert.match(qml, /QQC\.Button \{/);
+  assert.match(barQml, /^Item \{/m);
+  assert.match(barQml, /MouseArea \{/);
   assert.match(barQml, /runtime\.invoke\("control"/);
   assert.match(barQml, /JSON\.parse\(mediaCall\.utf8Text/);
 });
