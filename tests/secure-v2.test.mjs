@@ -40,15 +40,15 @@ test("isolated QML has no ambient Quickshell, process, filesystem, or compositor
     "import Quickshell", "Process {", "FileView {", "PanelWindow {",
     "Hyprland", "WlrLayershell", "Quickshell.env", "Omarchy.PluginPresentation",
   ]) assert.equal(source.includes(forbidden), false, forbidden);
-  assert.match(qml, /runtime\.invoke\("fetch"/);
-  assert.match(qml, /runtime\.invoke\("play"/);
-  assert.match(qml, /runtime\.invoke\("control"/);
+  assert.match(qml, /runtime\.invoke\("network\.fetch", "fetch"/);
+  assert.match(qml, /runtime\.invoke\("media\.play-stream", "play"/);
+  assert.match(qml, /runtime\.invoke\("media\.play-stream", "control"/);
   assert.match(qml, /decodeDirectory/);
   assert.match(qml, /decodeDirectory\(fetchCall\.utf8Text\)/);
   assert.match(qml, /function onCallFinished\(call\)/);
   assert.match(qml, /playbackHandle/);
   assert.equal(qml.includes("url_resolved"), false);
-  assert.match(barQml, /runtime\.invoke\("control"/);
+  assert.match(barQml, /runtime\.invoke\("media\.play-stream", "control"/);
 });
 
 test("dynamic requests pin trusted definitions and operations", () => {
@@ -69,19 +69,23 @@ test("QML operations and demand scopes are a subset of the manifest request", ()
   const barMediaScope = JSON.parse(barQml.match(/readonly property string mediaScope: '([^']+)'/)[1]);
 
   assert.deepEqual(fetchScope, {methods: fetch.methods, origins: fetch.origins});
-  assert.deepEqual(mediaScope, {controls: media.controls, sourceHandles: media.sourceHandles});
+  assert.deepEqual(mediaScope, {controls: media.controls, sourceCapabilities: media.sourceCapabilities});
   assert.deepEqual(barMediaScope, mediaScope);
-  assert.deepEqual([...new Set([...qml.matchAll(/runtime\.invoke\("(fetch|play|control)"/g)]
-    .map(match => match[1]))].sort(), [...fetch.operations, ...media.operations].sort());
-  assert.match(qml, /runtime\.invoke\("fetch", \{demandScope: fetchScope,/);
-  assert.match(qml, /runtime\.invoke\("play", \{demandScope: mediaScope,/);
-  assert.match(qml, /runtime\.invoke\("control", \{demandScope: mediaScope,/);
-  assert.match(barQml, /runtime\.invoke\("control", \{demandScope: mediaScope,/);
+  const qualified = [...qml.matchAll(/runtime\.invoke\("([^"]+)", "([^"]+)"/g)]
+    .map(match => [match[1], match[2]]);
+  assert.deepEqual([...new Set(qualified.filter(pair => pair[0] !== "storage.private")
+    .map(pair => pair[1]))].sort(), [...fetch.operations, ...media.operations].sort());
+  assert.match(qml, /runtime\.invoke\("network\.fetch", "fetch", \{demandScope: fetchScope,/);
+  assert.match(qml, /runtime\.invoke\("media\.play-stream", "play", \{demandScope: mediaScope,/);
+  assert.match(qml, /runtime\.invoke\("media\.play-stream", "control", \{demandScope: mediaScope,/);
+  assert.match(barQml, /runtime\.invoke\("media\.play-stream", "control", \{demandScope: mediaScope,/);
 
-  const allInvokes = [...qml.matchAll(/runtime\.invoke\("([^"]+)"/g),
-    ...barQml.matchAll(/runtime\.invoke\("([^"]+)"/g)].map(match => match[1]);
-  const allowed = new Set(["fetch", "play", "control", "storage_read", "storage_write"]);
-  for (const operation of allInvokes) assert.equal(allowed.has(operation), true, operation);
+  const allInvokes = [...qml.matchAll(/runtime\.invoke\("([^"]+)", "([^"]+)"/g),
+    ...barQml.matchAll(/runtime\.invoke\("([^"]+)", "([^"]+)"/g)]
+    .map(match => `${match[1]}/${match[2]}`);
+  const allowed = new Set(["network.fetch/fetch", "media.play-stream/play",
+    "media.play-stream/control", "storage.private/read", "storage.private/write"]);
+  for (const invocation of allInvokes) assert.equal(allowed.has(invocation), true, invocation);
   assert.equal(requests.has("storage.private"), true);
 });
 
@@ -98,7 +102,7 @@ test("port keeps the product station model and globe in their original files", (
 test("directory response is bounded and no observation API is implied", () => {
   assert.match(qml, /result\.stations\.length > 64/);
   assert.match(qml, /runtime\.readPackagedText\("assets\/countries\.json", 524288\)/);
-  assert.match(qml, /permissionSnapshot\["network\.fetch"\]\.operations\.fetch === "granted"/);
+  assert.match(qml, /runtime\.hasPermission\("network\.fetch", "fetch"\)/);
   assert.match(qml, /Directory unavailable:/);
   assert.equal(JSON.stringify(manifest).includes("system.observe"), false);
   assert.equal(qml.includes("screensaver"), false);
@@ -107,9 +111,9 @@ test("directory response is bounded and no observation API is implied", () => {
 test("permission state is immutable for the generation", () => {
   for (const source of [qml, barQml]) {
     assert.equal(source.includes("onPermissionsChanged"), false);
-    assert.equal(source.includes("permissionState("), false);
+    assert.equal(source.includes("onPermissionsChanged"), false);
   }
-  assert.match(qml, /readonly property var permissionSnapshot: runtime\.permissions/);
+  assert.match(qml, /runtime\.hasPermission\("network\.fetch", "fetch"\)/);
   assert.match(qml, /function onBrokerReadyChanged\(\) \{ root\.startRuntime\(\) \}/);
 });
 
@@ -147,6 +151,6 @@ test("migrated UI retains a bounded subset of navigation and library code", () =
   assert.match(qml, /QQC\.Button \{/);
   assert.match(barQml, /^Item \{/m);
   assert.match(barQml, /MouseArea \{/);
-  assert.match(barQml, /runtime\.invoke\("control"/);
+  assert.match(barQml, /runtime\.invoke\("media\.play-stream", "control"/);
   assert.match(barQml, /JSON\.parse\(mediaCall\.utf8Text/);
 });

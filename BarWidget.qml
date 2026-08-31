@@ -8,7 +8,7 @@ Item {
   height: button.height
   property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
 
-  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
+  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceCapabilities":["network.fetch"]}'
   property var mediaCall: null
   property bool playing: false
   property bool paused: false
@@ -22,7 +22,7 @@ Item {
   function control(action, value) {
     var payload = {control: action}
     if (action === "volume") payload.value = Math.max(0, Math.min(100, Math.round(Number(value))))
-    mediaCall = runtime.invoke("control", {demandScope: mediaScope, payload: payload})
+    mediaCall = runtime.invoke("media.play-stream", "control", {demandScope: mediaScope, payload: payload})
   }
 
   function applyPlayerState() {

@@ -13,7 +13,7 @@ Item {
   ]
 
   readonly property string fetchScope: '{"methods":["GET"],"origins":["https://all.api.radio-browser.info"]}'
-  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
+  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceCapabilities":["network.fetch"]}'
   property var countries: []
   property var stations: []
   property var results: []
@@ -43,10 +43,8 @@ Item {
   property bool runtimeStarted: false
   readonly property var displayStations: mode === "favorites" ? favorites
     : mode === "recent" ? recent : results
-  readonly property var permissionSnapshot: runtime.permissions
   readonly property bool directoryAvailable:
-    !!permissionSnapshot["network.fetch"]
-      && permissionSnapshot["network.fetch"].operations.fetch === "granted"
+    runtime.hasPermission("network.fetch", "fetch")
   readonly property color background: "#090a0c"
   readonly property color foreground: "#f2f4f8"
   readonly property color accent: "#5e81ac"
@@ -151,7 +149,7 @@ Item {
     fetching = true
     errorText = ""
     statusText = "Loading Radio Browser…"
-    fetchCall = runtime.invoke("fetch", {demandScope: fetchScope,
+    fetchCall = runtime.invoke("network.fetch", "fetch", {demandScope: fetchScope,
       payload: {operation: "radio-directory.world", limit: 64}})
     if (fetchCall && fetchCall.finished) finishFetch()
   }
@@ -226,21 +224,21 @@ Item {
   function play(station) {
     if (!station || !station.uuid || !station.playbackHandle) return false
     pendingPlayStation = station
-    mediaCall = runtime.invoke("play", {demandScope: mediaScope,
-      payload: {handle: station.playbackHandle}})
+    mediaCall = runtime.invoke("media.play-stream", "play", {demandScope: mediaScope,
+      payload: {sourceHandle: station.playbackHandle}})
     if (mediaCall && mediaCall.finished) finishMedia()
     return true
   }
 
   function setVolume(nextVolume) {
     var bounded = Math.max(0, Math.min(100, Math.round(Number(nextVolume))))
-    var call = runtime.invoke("control", {demandScope: mediaScope,
+    var call = runtime.invoke("media.play-stream", "control", {demandScope: mediaScope,
       payload: {control: "volume", value: bounded}})
     if (call && call.finished && call.ok) volume = bounded
   }
 
   function controlPlayer(control, value) {
-    mediaCall = runtime.invoke("control", {demandScope: mediaScope,
+    mediaCall = runtime.invoke("media.play-stream", "control", {demandScope: mediaScope,
       payload: control === "volume" ? {control: control, value: value} : {control: control}})
   }
 
@@ -283,7 +281,7 @@ Item {
 
   function saveLocalState() {
     pendingStorageAction = "write"
-    storageCall = runtime.invoke("storage_write", {key: "radio-state-v1",
+    storageCall = runtime.invoke("storage.private", "write", {key: "radio-state-v1",
       value: JSON.stringify({favorites: favoriteUuids,
         recent: recentUuids, volume: volume}),
       quotaBytes: 1048576, itemBytes: 4096})
@@ -291,7 +289,7 @@ Item {
 
   function loadLocalState() {
     pendingStorageAction = "read"
-    storageCall = runtime.invoke("storage_read", {key: "radio-state-v1",
+    storageCall = runtime.invoke("storage.private", "read", {key: "radio-state-v1",
       quotaBytes: 1048576, itemBytes: 4096})
   }
 
