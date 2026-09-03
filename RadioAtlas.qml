@@ -1,19 +1,14 @@
 import QtQuick
 import QtQuick.Controls as QQC
-import Quickshell
-import Quickshell.Hyprland
-import Quickshell.Io
-import Quickshell.Wayland
-import qs.Commons
-import qs.Ui
+import Omarchy.PluginPresentation 1.0
 import "RadioModel.js" as RadioModel
 
 Item {
   id: root
 
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-  property var shell: null
-  property var manifest: null
+  width: 1180
+  height: 760
+  property var inputRegions: [{x: card.x, y: card.y, width: card.width, height: card.height}]
 
   property bool opened: false
   property var countries: []
@@ -52,6 +47,8 @@ Item {
   property string recordedStationUuid: ""
   property string lastRandomUuid: ""
   property bool playCancellationRequested: false
+  readonly property bool canPlay: runtime.hasPermission("media.play-stream", "play")
+  readonly property bool canControl: runtime.hasPermission("media.play-stream", "control")
   property var pendingPlayStation: null
   property string pendingPlayScope: ""
   property var pendingPlayStations: []
@@ -70,7 +67,7 @@ Item {
   readonly property string fetchPath: Qt.resolvedUrl("radio-fetch").toString().replace(/^file:\/\//, "")
   readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
   readonly property string statePath: Qt.resolvedUrl("radio-state").toString().replace(/^file:\/\//, "")
-  readonly property string runtimePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas"
+  readonly property string runtimePath: ""
   readonly property string statusPath: runtimePath + "/status.json"
   readonly property string playSelectionPath: runtimePath + "/play-selection.json"
   readonly property string favoriteSelectionPath: runtimePath + "/favorite-selection.json"
@@ -175,19 +172,7 @@ Item {
 
   function dismiss() {
     close()
-    if (shell && typeof shell.hide === "function")
-      shell.hide((manifest && manifest.id) || "akshar.radio-atlas")
-  }
-
-  function handleHyprlandEvent(event) {
-    if (!opened || String(event && event.name || "") !== "openwindow") return
-    var parts = []
-    try {
-      parts = event.parse(4)
-    } catch (error) {
-      parts = String(event && event.data || "").split(",")
-    }
-    if (String(parts[2] || "") === "org.omarchy.screensaver") dismiss()
+    runtime.requestSurfaceIntent("atlas", "dismiss")
   }
 
   function highlightStationCountry(station, focusGlobe) {
@@ -423,6 +408,7 @@ Item {
 
   function playStation(station, scope, stations) {
     if (!station) return
+    if (!canPlay) { playerError = "Playback permission was not granted"; return }
     if (playerActionBusy) {
       pendingPlayStation = station
       pendingPlayScope = scope
@@ -458,6 +444,7 @@ Item {
   }
 
   function playerAction(action) {
+    if (!canControl) { playerError = "Playback control permission was not granted"; return }
     if (playerActionBusy) return
     playerError = ""
     playerActionProcess.action = action
@@ -468,6 +455,7 @@ Item {
   }
 
   function stopPlayer() {
+    if (!canControl) { playerError = "Playback control permission was not granted"; return }
     cancelPendingPlay()
     if (stopProcess.running || playCancellationRequested) return
     if (playerActionProcess.running && !playPreparing) return
@@ -528,6 +516,7 @@ Item {
   }
 
   function setPlayerVolume(value) {
+    if (!canControl) { playerError = "Playback control permission was not granted"; return }
     pendingVolume = Math.max(0, Math.min(100, Math.round(value)))
     playerVolume = pendingVolume
     playerError = ""
@@ -655,10 +644,8 @@ Item {
     return "No working stations found."
   }
 
-  FileView {
-    path: Qt.resolvedUrl("assets/countries.json").toString().replace(/^file:\/\//, "")
-    watchChanges: false
-    printErrors: true
+  PackagedText {
+    path: "assets/countries.json"
     onLoaded: {
       try {
         var collection = JSON.parse(text())
@@ -670,7 +657,7 @@ Item {
     }
   }
 
-  FileView {
+  RadioFileView {
     path: root.statusReady ? root.statusPath : ""
     watchChanges: true
     atomicWrites: true
@@ -679,7 +666,7 @@ Item {
     onFileChanged: reload()
   }
 
-  FileView {
+  RadioFileView {
     id: playSelectionFile
     path: root.playSelectionPath
     preload: false
@@ -690,7 +677,7 @@ Item {
     onSaveFailed: root.playerError = "Could not prepare this station"
   }
 
-  FileView {
+  RadioFileView {
     id: favoriteSelectionFile
     path: root.favoriteSelectionPath
     preload: false
@@ -701,7 +688,7 @@ Item {
     onSaveFailed: root.localError = "Favorite could not be updated"
   }
 
-  Process {
+  RadioProcess {
     id: statusInitProcess
     command: []
     onExited: function(exitCode) {
@@ -709,7 +696,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: fetchProcess
     command: []
     stdout: StdioCollector {
@@ -788,7 +775,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: worldExpandProcess
     command: []
     stdout: StdioCollector {
@@ -825,7 +812,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: volumeProcess
     property int submittedVolume: -1
     property string output: ""
@@ -863,7 +850,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: playerActionProcess
     property string action: ""
     property string output: ""
@@ -890,7 +877,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: stopProcess
     command: []
     onExited: function(exitCode) {
@@ -900,7 +887,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: stateProcess
     property string action: ""
     property string output: ""
@@ -938,7 +925,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: historyProcess
     property string output: ""
     property string errorOutput: ""
@@ -1001,22 +988,9 @@ Item {
     statusInitProcess.running = true
   }
 
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) { root.handleHyprlandEvent(event) }
-  }
-
-  PanelWindow {
+  Item {
     id: panel
-    visible: root.opened
-    anchors { top: true; bottom: true; left: true; right: true }
-    mask: Region { item: card }
-    color: "transparent"
-    WlrLayershell.namespace: "omarchy-radio-atlas"
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: root.opened && cardHover.hovered
-      ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Ignore
+    anchors.fill: parent
 
     BorderSurface {
       id: card
@@ -1572,7 +1546,7 @@ Item {
               Button {
                 iconText: "\uf048"
                 tooltipText: "Previous station"
-                enabled: root.playerRunning && !root.playerActionBusy
+                enabled: root.canControl && root.playerRunning && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1581,7 +1555,7 @@ Item {
               Button {
                 iconText: root.playerRunning && !root.playerPaused ? "\uf04c" : "\uf04b"
                 tooltipText: root.playerRunning && !root.playerPaused ? "Pause" : "Play"
-                enabled: !root.playerActionBusy
+                enabled: (root.playerRunning ? root.canControl : root.canPlay) && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1590,7 +1564,7 @@ Item {
               Button {
                 iconText: "\uf051"
                 tooltipText: "Next station"
-                enabled: root.playerRunning && !root.playerActionBusy
+                enabled: root.canControl && root.playerRunning && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1599,7 +1573,7 @@ Item {
               Button {
                 iconText: "\uf04d"
                 tooltipText: "Stop"
-                enabled: (root.playerRunning || root.playPreparing)
+                enabled: root.canControl && (root.playerRunning || root.playPreparing)
                   && !stopProcess.running
                   && !root.playCancellationRequested
                   && (!playerActionProcess.running || root.playPreparing)
@@ -1623,7 +1597,7 @@ Item {
                 iconText: root.playerMuted || root.playerVolume === 0 ? "\uf026" : "\uf028"
                 tooltipText: root.playerMuted ? "Unmute" : "Mute (M)"
                 active: root.playerMuted
-                enabled: root.playerRunning && !root.playerActionBusy
+                enabled: root.canControl && root.playerRunning && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1644,7 +1618,7 @@ Item {
                 fillColor: root.accent
                 knobColor: root.foreground
                 tickColor: root.background
-                enabled: !stopProcess.running
+                enabled: root.canControl && !stopProcess.running
                 Accessible.name: "Radio volume"
                 onMoved: function(nextVolume) { root.setPlayerVolume(nextVolume) }
                 onRightClicked: root.playerAction("mute")

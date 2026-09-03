@@ -4,13 +4,17 @@ set -euo pipefail
 project_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 jq -e '
-  .schemaVersion == 1
+  .schemaVersion == 2
   and .id == "akshar.radio-atlas"
-  and .version == "0.1.4"
-  and (.kinds | index("overlay"))
-  and (.kinds | index("bar-widget"))
-  and .keepLoaded == true
+  and .runtime.surfaceQml.atlas == "RadioAtlas.qml"
+  and .runtime.surfaceQml.barWidget == "BarWidget.qml"
+  and .surfaces.atlas.role == "desktop-overlay"
+  and .surfaces.barWidget.role == "bar-embedded"
+  and (.permissions.optional | map(.capability) | index("storage.private"))
+  and ([.permissions.optional[] | select(.capability == "storage.private")][0].itemBytes == 49152)
 ' "$project_dir/manifest.json" >/dev/null
+max_state_bytes=$(node -e 'const id="x".repeat(64); console.log(Buffer.byteLength(JSON.stringify({schemaVersion:1,favorites:Array(500).fill(id),recent:Array(30).fill(id),volume:100})))')
+(( max_state_bytes < 49152 ))
 
 bash -n "$project_dir/radio-fetch" "$project_dir/radio-player" \
   "$project_dir/radio-sandbox" "$project_dir/radio-session" "$project_dir/radio-state" \
@@ -107,14 +111,44 @@ rg -Fq 'Math.min(1.5, Math.max(0.7, globeRadius / 500))' "$project_dir/Globe.qml
 rg -Fq 'estimatedLocation === true' "$project_dir/Globe.qml"
 sed -n '/function paintGlobe/,/^  }/p' "$project_dir/Globe.qml" \
   | rg -Fq 'if (!isFinite(globeRadius) || globeRadius <= 0) return'
-rg -q 'WlrLayershell.keyboardFocus: root.opened' "$project_dir/RadioAtlas.qml"
-rg -q '^import Quickshell.Hyprland$' "$project_dir/RadioAtlas.qml"
-sed -n '/function handleHyprlandEvent/,/^  }/p' "$project_dir/RadioAtlas.qml" \
-  | rg -Fq 'event.parse(4)'
-sed -n '/function handleHyprlandEvent/,/^  }/p' "$project_dir/RadioAtlas.qml" \
-  | rg -Fq 'org.omarchy.screensaver'
-sed -n '/function handleHyprlandEvent/,/^  }/p' "$project_dir/RadioAtlas.qml" \
-  | rg -Fq 'dismiss()'
+! rg -q 'Quickshell|WlrLayershell|Hyprland|PanelWindow|execDetached' \
+  "$project_dir/RadioAtlas.qml" "$project_dir/BarWidget.qml"
+rg -Fq 'runtime.requestSurfaceIntent("atlas", "dismiss")' "$project_dir/RadioAtlas.qml"
+jq -e '.author == "Akshar Patel" and .license == "MIT"
+  and .homepage == "https://github.com/AksharP5/omarchy-radio-atlas"
+  and .repository == "https://github.com/AksharP5/omarchy-radio-atlas"
+  and .keywords == ["radio", "world", "globe", "music", "mpris"]' \
+  "$project_dir/manifest.json" >/dev/null
+rg -Fq 'runtime.requestSurfaceIntent("atlas", "toggle")' "$project_dir/BarWidget.qml"
+rg -Fq 'runtime.requestSurfaceIntent("atlas", "open", {payload: {action: "random"}})' "$project_dir/BarWidget.qml"
+rg -Fq 'runtime.invoke("network.fetch", "fetch"' "$project_dir/RadioProcess.qml"
+rg -Fq 'runtime.invoke("media.play-stream", "play"' "$project_dir/RadioProcess.qml"
+rg -Fq 'runtime.hasPermission("media.play-stream", "play")' "$project_dir/RadioProcess.qml"
+rg -Fq 'runtime.hasPermission("media.play-stream", "control")' "$project_dir/RadioProcess.qml"
+jq -e '(.permissions.required | map(.capability)) == ["network.fetch"]
+  and (.permissions.optional | map(.capability) | contains(["media.play-stream", "storage.private"]))' \
+  "$project_dir/manifest.json" >/dev/null
+rg -Fq 'property PrivateStorage storage: PrivateStorage { itemBytes: 49152 }' "$project_dir/RadioStorage.qml"
+rg -Fq 'payload: {method: "GET", origin: "https://all.api.radio-browser.info", path: path' "$project_dir/RadioProcess.qml"
+rg -Fq 'mediaJsonPointers: ["/*/url_resolved"]' "$project_dir/RadioProcess.qml"
+rg -Fq 'responseType: "json"' "$project_dir/RadioProcess.qml"
+rg -Fq '"/json/stations/byuuid?uuids=" + encodeURIComponent(chunk.join(","))' "$project_dir/RadioProcess.qml"
+! rg -q 'radio-directory\.(world|country|search|resolve)' "$project_dir/RadioProcess.qml"
+rg -Fq 'storage.writeText("state"' "$project_dir/RadioStorage.qml"
+rg -Fq 'stableIds(favorites, 500)' "$project_dir/RadioStorage.qml"
+rg -Fq 'RadioStorage.resolve(saved.favorites, rows)' "$project_dir/RadioProcess.qml"
+rg -Fq 'PackagedText {' "$project_dir/RadioAtlas.qml"
+rg -Fq 'payload: {handle: station.playbackHandle, volume: RadioSessionState.volume}' "$project_dir/RadioProcess.qml"
+rg -Fq 'RadioModel.mergeStations(RadioSessionState.worldStations, rows, 5000)' "$project_dir/RadioProcess.qml"
+rg -Fq 'RadioSessionState.playerStatus = text' "$project_dir/RadioProcess.qml"
+rg -Fq 'RadioSessionState.statusRevisionChanged.connect(statusChanged)' "$project_dir/RadioFileView.qml"
+! rg -q 'playbackHandle.*storage_write|storage_write.*playbackHandle' "$project_dir/RadioStorage.qml"
+rg -Fq 'import Omarchy.PluginPresentation 1.0' \
+  "$project_dir/RadioAtlas.qml" "$project_dir/BarWidget.qml" \
+  "$project_dir/RadioProcess.qml" "$project_dir/RadioStorage.qml"
+! find "$project_dir" -path '*/qs/Commons/*' -o -path '*/qs/Ui/*' | rg -q .
+! rg -q '^import qs\.(Commons|Ui)' "$project_dir"/*.qml
+! rg -q '^import Quickshell' "$project_dir"/*.qml
 rg -q 'keyboardSelectionVisible' "$project_dir/RadioAtlas.qml"
 rg -q 'reportedVolume' "$project_dir/RadioAtlas.qml"
 rg -q 'submittedVolume' "$project_dir/RadioAtlas.qml"

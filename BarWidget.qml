@@ -1,8 +1,5 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
-import qs.Commons
-import qs.Ui
+import Omarchy.PluginPresentation 1.0
 
 BarWidget {
   id: root
@@ -17,8 +14,10 @@ BarWidget {
   property int pendingVolume: -1
   property string playerTitle: ""
   property bool statusReady: false
+  readonly property bool canPlay: runtime.hasPermission("media.play-stream", "play")
+  readonly property bool canControl: runtime.hasPermission("media.play-stream", "control")
   readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
-  readonly property string statusPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas/status.json"
+  readonly property string statusPath: "radio-status"
 
   function singleLineText(value, limit) {
     return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, limit)
@@ -47,12 +46,14 @@ BarWidget {
   }
 
   function runPlayerAction(action) {
+    if (!canControl) return
     if (actionProcess.running) return
     actionProcess.command = [root.playerPath, action]
     actionProcess.running = true
   }
 
   function changeVolume(delta) {
+    if (!canControl) return
     var current = pendingVolume >= 0 ? pendingVolume : playerVolume
     pendingVolume = Math.max(0, Math.min(100, current + (delta > 0 ? 5 : -5)))
     playerVolume = pendingVolume
@@ -69,7 +70,7 @@ BarWidget {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  FileView {
+  RadioFileView {
     path: root.statusReady ? root.statusPath : ""
     watchChanges: true
     atomicWrites: true
@@ -78,7 +79,7 @@ BarWidget {
     onFileChanged: reload()
   }
 
-  Process {
+  RadioProcess {
     id: statusInitProcess
     command: []
     onExited: function(exitCode) {
@@ -86,7 +87,7 @@ BarWidget {
     }
   }
 
-  Process {
+  RadioProcess {
     id: actionProcess
     command: []
     onExited: function(exitCode) {
@@ -94,7 +95,7 @@ BarWidget {
     }
   }
 
-  Process {
+  RadioProcess {
     id: volumeProcess
     property int submittedVolume: -1
     command: []
@@ -130,23 +131,22 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: "\uf0ac"
-    active: root.playerRunning && !root.playerPaused
+    active: root.canPlay && root.playerRunning && !root.playerPaused
     tooltipText: root.playerRunning
       ? (root.playerPaused ? "Radio paused: " : "Playing: ") + root.safeTooltipText(root.playerTitle)
         + "  ·  " + (root.playerMuted ? "muted" : root.playerVolume + "%")
       : "Open Radio Atlas"
 
     onPressed: function(mouseButton) {
-      if (!root.bar) return
       if (mouseButton === Qt.RightButton) {
         root.runPlayerAction("stop")
         return
       }
       if (mouseButton === Qt.MiddleButton) {
-        root.bar.run("omarchy-shell shell summon akshar.radio-atlas '{\"action\":\"random\"}'")
+        runtime.requestSurfaceIntent("atlas", "open", {payload: {action: "random"}})
         return
       }
-      root.bar.run("omarchy-shell shell toggle akshar.radio-atlas")
+      runtime.requestSurfaceIntent("atlas", "toggle")
     }
 
     onWheelMoved: function(delta) {
