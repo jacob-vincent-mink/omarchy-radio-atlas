@@ -48,7 +48,7 @@ test("isolated QML uses only the authority-free presentation module and brokered
   assert.match(qml, /decodeDirectory\(fetchCall\.utf8Text\)/);
   assert.match(qml, /function onCallFinished\(call\)/);
   assert.match(qml, /playbackHandle/);
-  assert.equal(qml.includes("url_resolved"), false);
+  assert.equal(qml.includes("station.url"), false);
   assert.match(barQml, /runtime\.invoke\("media\.play-stream", "control"/);
 });
 
@@ -70,14 +70,17 @@ test("QML operations and demand scopes are a subset of the manifest request", ()
   const barMediaScope = JSON.parse(barQml.match(/readonly property string mediaScope: '([^']+)'/)[1]);
 
   assert.deepEqual(fetchScope, {methods: fetch.methods, origins: fetch.origins});
-  assert.deepEqual(mediaScope, {controls: media.controls, sourceCapabilities: media.sourceCapabilities});
+  assert.deepEqual(mediaScope, {controls: media.controls, sourceHandles: media.sourceHandles});
   assert.deepEqual(barMediaScope, mediaScope);
   const qualified = [...qml.matchAll(/runtime\.invoke\("([^"]+)", "([^"]+)"/g)]
     .map(match => [match[1], match[2]]);
   assert.deepEqual([...new Set(qualified.filter(pair => pair[0] !== "storage.private")
     .map(pair => pair[1]))].sort(), [...fetch.operations, ...media.operations].sort());
   assert.match(qml, /runtime\.invoke\("network\.fetch", "fetch", \{demandScope: fetchScope,/);
+  assert.match(qml, /method: "GET", origin: "https:\/\/all\.api\.radio-browser\.info"/);
+  assert.match(qml, /mediaJsonPointers: \["\/\*\/url_resolved"\]/);
   assert.match(qml, /runtime\.invoke\("media\.play-stream", "play", \{demandScope: mediaScope,/);
+  assert.match(qml, /payload: \{handle: station\.playbackHandle, volume: volume\}/);
   assert.match(qml, /runtime\.invoke\("media\.play-stream", "control", \{demandScope: mediaScope,/);
   assert.match(barQml, /runtime\.invoke\("media\.play-stream", "control", \{demandScope: mediaScope,/);
 
@@ -101,7 +104,8 @@ test("port keeps the product station model and globe in their original files", (
 });
 
 test("directory response is bounded and no observation API is implied", () => {
-  assert.match(qml, /result\.stations\.length > 64/);
+  assert.match(qml, /result\.json\.length > 64/);
+  assert.match(qml, /playbackHandle = result\.sourceHandles/);
   assert.match(qml, /runtime\.readPackagedText\("assets\/countries\.json", 524288\)/);
   assert.match(qml, /runtime\.hasPermission\("network\.fetch", "fetch"\)/);
   assert.match(qml, /Directory unavailable:/);

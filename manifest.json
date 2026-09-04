@@ -19,7 +19,7 @@
   "permissions": {
     "required": [
       {"capability": "network.fetch", "definitionGeneration": 1, "definitionDigest": "fd879fab2d17f35dcb56b0d3426ffc436a5c46d9dd717e6ca0a03ee0accaf62b", "operations": ["fetch"], "origins": ["https://all.api.radio-browser.info"], "methods": ["GET"], "reason": "Find public radio stations without exposing general network access"},
-      {"capability": "media.play-stream", "definitionGeneration": 1, "definitionDigest": "40709dc8191bee3db0a20c0ab1f28ddd729175eecb4c333d09b45687ae47950b", "operations": ["control", "play"], "sourceCapabilities": ["network.fetch"], "controls": ["pause", "stop", "mute", "volume", "status"], "reason": "Play only activation-bound station handles through a host-owned media session"},
+      {"capability": "media.play-stream", "definitionGeneration": 1, "definitionDigest": "40709dc8191bee3db0a20c0ab1f28ddd729175eecb4c333d09b45687ae47950b", "operations": ["control", "play"], "sourceHandles": ["network.fetch"], "controls": ["pause", "stop", "mute", "volume", "status"], "reason": "Play only activation-bound station handles through a host-owned media session"},
       {"capability": "storage.private", "quotaBytes": 1048576, "itemBytes": 4096, "reason": "Save bounded favorites, history, and volume"}
     ],
     "optional": []

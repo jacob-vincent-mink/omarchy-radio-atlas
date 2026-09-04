@@ -8,7 +8,7 @@ Item {
   implicitHeight: Style.bar.size
   property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
 
-  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceCapabilities":["network.fetch"]}'
+  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
   property var mediaCall: null
   property bool playing: false
   property bool paused: false

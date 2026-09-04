@@ -14,7 +14,7 @@ Item {
   ]
 
   readonly property string fetchScope: '{"methods":["GET"],"origins":["https://all.api.radio-browser.info"]}'
-  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceCapabilities":["network.fetch"]}'
+  readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceHandles":["network.fetch"]}'
   property var countries: []
   property var stations: []
   property var results: []
@@ -74,20 +74,22 @@ Item {
     if (text === null) return null
     try {
       var result = JSON.parse(text)
-      if (!result || result.version !== 1 || !Array.isArray(result.stations) || result.stations.length > 64) return null
+      if (!result || result.ok !== true || !Array.isArray(result.json)
+          || result.json.length > 64 || !result.sourceHandles) return null
       var normalized = []
-      for (var i = 0; i < result.stations.length; ++i) {
-        var station = result.stations[i]
-        if (!station || typeof station.uuid !== "string" || station.uuid.length === 0 || station.uuid.length > 64
+      for (var i = 0; i < result.json.length; ++i) {
+        var station = result.json[i]
+        var playbackHandle = result.sourceHandles["/" + i + "/url_resolved"]
+        if (!station || typeof station.stationuuid !== "string" || station.stationuuid.length === 0 || station.stationuuid.length > 64
             || typeof station.name !== "string" || station.name.length === 0 || station.name.length > 160
-            || typeof station.playbackHandle !== "string" || station.playbackHandle.length === 0 || station.playbackHandle.length > 32) return null
-        normalized.push({uuid: station.uuid, name: station.name, country: String(station.country || "").slice(0, 96),
-          countryCode: String(station.countryCode || "").slice(0, 2).toUpperCase(),
-          latitude: station.latitude === null ? null : Number(station.latitude),
-          longitude: station.longitude === null ? null : Number(station.longitude),
-          votes: Math.max(0, Math.round(Number(station.votes || 0))), playbackHandle: station.playbackHandle})
+            || typeof playbackHandle !== "string" || playbackHandle.length !== 32) continue
+        normalized.push({uuid: station.stationuuid, name: station.name, country: String(station.country || "").slice(0, 96),
+          countryCode: String(station.countrycode || "").slice(0, 2).toUpperCase(),
+          latitude: station.geo_lat === null ? null : Number(station.geo_lat),
+          longitude: station.geo_long === null ? null : Number(station.geo_long),
+          votes: Math.max(0, Math.round(Number(station.votes || 0))), playbackHandle: playbackHandle})
       }
-      return normalized
+      return normalized.length > 0 ? normalized : null
     } catch (error) { return null }
   }
 
@@ -155,7 +157,9 @@ Item {
     errorText = ""
     statusText = "Loading Radio Browser…"
     fetchCall = runtime.invoke("network.fetch", "fetch", {demandScope: fetchScope,
-      payload: {operation: "radio-directory.world", limit: 64}})
+      payload: {method: "GET", origin: "https://all.api.radio-browser.info",
+        path: "/json/stations/topvote/40?hidebroken=true",
+        responseType: "json", mediaJsonPointers: ["/*/url_resolved"]}})
     if (fetchCall && fetchCall.finished) finishFetch()
   }
 
@@ -237,7 +241,7 @@ Item {
     }
     pendingPlayStation = station
     mediaCall = runtime.invoke("media.play-stream", "play", {demandScope: mediaScope,
-      payload: {sourceHandle: station.playbackHandle}})
+      payload: {handle: station.playbackHandle, volume: volume}})
     if (mediaCall && mediaCall.finished) finishMedia()
     return true
   }
