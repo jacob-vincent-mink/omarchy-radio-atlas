@@ -1,11 +1,12 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQml as Qml
+import Omarchy.PluginPresentation 1.0
 
 Item {
   id: root
-  width: button.width
-  height: button.height
+  implicitWidth: Style.bar.statusSlot
+  implicitHeight: Style.bar.size
   property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
 
   readonly property string mediaScope: '{"controls":["pause","stop","mute","volume","status"],"sourceCapabilities":["network.fetch"]}'
@@ -79,11 +80,8 @@ Item {
 
   Rectangle {
     id: button
-    width: 44
-    height: 36
-    radius: 8
-    color: pointer.containsMouse ? "#243142" : "transparent"
-    border.color: pointer.containsMouse ? "#3b526c" : "transparent"
+    anchors.fill: parent
+    color: "transparent"
     opacity: !root.playing || root.paused ? 0.6 : 1
 
     QQC.ToolTip.visible: pointer.containsMouse
@@ -92,8 +90,9 @@ Item {
     Text {
       anchors.centerIn: parent
       text: "\uf0ac"
-      color: "#f2f4f8"
-      font.pixelSize: 18
+      color: Color.bar.text
+      font.family: Style.font.family
+      font.pixelSize: Style.font.icon
     }
 
     MouseArea {

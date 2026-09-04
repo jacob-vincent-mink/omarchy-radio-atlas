@@ -35,11 +35,12 @@ test("candidate asks for purpose-built authority, never ambient escape hatches",
     assert.equal(capabilities.includes(forbidden), false);
 });
 
-test("isolated QML has no ambient Quickshell, process, filesystem, or compositor API", () => {
+test("isolated QML uses only the authority-free presentation module and brokered APIs", () => {
   for (const source of [qml, barQml]) for (const forbidden of [
     "import Quickshell", "Process {", "FileView {", "PanelWindow {",
-    "Hyprland", "WlrLayershell", "Quickshell.env", "Omarchy.PluginPresentation",
+    "Hyprland", "WlrLayershell", "Quickshell.env", "import qs.Commons", "import qs.Ui",
   ]) assert.equal(source.includes(forbidden), false, forbidden);
+  assert.match(barQml, /import Omarchy\.PluginPresentation 1\.0/);
   assert.match(qml, /runtime\.invoke\("network\.fetch", "fetch"/);
   assert.match(qml, /runtime\.invoke\("media\.play-stream", "play"/);
   assert.match(qml, /runtime\.invoke\("media\.play-stream", "control"/);
