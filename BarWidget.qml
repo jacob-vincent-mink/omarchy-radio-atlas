@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls as QQC
 import QtQml as Qml
 import Omarchy.PluginPresentation 1.0
 
@@ -83,9 +82,6 @@ Item {
     anchors.fill: parent
     color: "transparent"
     opacity: !root.playing || root.paused ? 0.6 : 1
-
-    QQC.ToolTip.visible: pointer.containsMouse
-    QQC.ToolTip.text: root.statusText
 
     Text {
       anchors.centerIn: parent
