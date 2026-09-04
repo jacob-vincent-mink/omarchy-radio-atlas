@@ -13,8 +13,8 @@
     }
   },
   "surfaces": {
-    "atlas": {"role": "desktop-overlay", "maximumWidth": 1440, "maximumHeight": 1000, "maximumFramesPerSecond": 60, "keyboardFocus": "after-gesture", "lockScreenVisible": false, "inputRegions": "dynamic-bounded"},
-    "barWidget": {"role": "bar-embedded", "maximumWidth": 72, "maximumHeight": 64, "maximumFramesPerSecond": 30, "defaultSection": "left", "inputRegions": "dynamic-bounded"}
+    "atlas": {"role": "desktop-overlay", "maximumWidth": 1180, "maximumHeight": 760, "maximumFramesPerSecond": 60, "keyboardFocus": "after-gesture", "lockScreenVisible": false, "inputRegions": "dynamic-bounded"},
+    "barWidget": {"role": "bar-embedded", "maximumWidth": 72, "maximumHeight": 64, "maximumFramesPerSecond": 30, "defaultSection": "right", "inputRegions": "dynamic-bounded"}
   },
   "permissions": {
     "required": [

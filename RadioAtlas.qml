@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQml as Qml
+import Omarchy.PluginPresentation 1.0
 import "RadioModel.js" as RadioModel
 
 Item {
@@ -49,10 +50,10 @@ Item {
     runtime.hasPermission("media.play-stream", "play")
   readonly property bool canControl:
     runtime.hasPermission("media.play-stream", "control")
-  readonly property color background: "#090a0c"
-  readonly property color foreground: "#f2f4f8"
-  readonly property color accent: "#5e81ac"
-  readonly property color urgent: "#bf616a"
+  readonly property color background: Color.background
+  readonly property color foreground: Color.foreground
+  readonly property color accent: Color.accent
+  readonly property color urgent: Color.urgent
   readonly property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.56)
   readonly property color faint: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.12)
 
