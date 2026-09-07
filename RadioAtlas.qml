@@ -1,18 +1,14 @@
 import QtQuick
 import QtQuick.Controls as QQC
-import Quickshell
-import Quickshell.Hyprland
-import Quickshell.Io
-import qs.Commons
-import qs.Ui
+import Omarchy.PluginPresentation 1.0
 import "RadioModel.js" as RadioModel
 
 Item {
   id: root
 
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-  property var shell: null
-  property var manifest: null
+  width: 1180
+  height: 760
+  property var inputRegions: [{x: card.x, y: card.y, width: card.width, height: card.height}]
 
   property bool opened: false
   property var countries: []
@@ -62,6 +58,8 @@ Item {
   property string recordedStationUuid: ""
   property string lastRandomUuid: ""
   property bool playCancellationRequested: false
+  readonly property bool canPlay: runtime.hasPermission("media.play-stream", "play")
+  readonly property bool canControl: runtime.hasPermission("media.play-stream", "control")
   property var pendingPlayStation: null
   property string pendingPlayScope: ""
   property var pendingPlayStations: []
@@ -80,7 +78,7 @@ Item {
   readonly property string fetchPath: Qt.resolvedUrl("radio-fetch").toString().replace(/^file:\/\//, "")
   readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
   readonly property string statePath: Qt.resolvedUrl("radio-state").toString().replace(/^file:\/\//, "")
-  readonly property string runtimePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas"
+  readonly property string runtimePath: ""
   readonly property string statusPath: runtimePath + "/status.json"
   readonly property string playSelectionPath: runtimePath + "/play-selection.json"
   readonly property string favoriteSelectionPath: runtimePath + "/favorite-selection.json"
@@ -114,13 +112,6 @@ Item {
   property color mapLand: lightTheme ? "#a9aaa6" : "#283039"
   property color mapGrid: lightTheme ? "#3f454a" : "#7d8791"
 
-  property bool windowSetupReady: false
-  property bool windowFrameReady: false
-  property string pendingOpenPayload: ""
-  readonly property int preferredWidth: Style.space(1180)
-  readonly property int preferredHeight: Style.space(760)
-  readonly property string windowPath:
-    Qt.resolvedUrl("radio-window").toString().replace(/^file:\/\//, "")
   readonly property int cardWidth: panel.width
   readonly property int cardHeight: panel.height
   readonly property int headerHeight: Style.space(68)
@@ -151,10 +142,10 @@ Item {
         { input: "CLICK SIGNAL", action: "Play station" },
         { input: "CLICK COUNTRY", action: "Browse stations" },
         { input: "BAR LEFT", action: "Open or close" },
-        { input: "BAR MIDDLE", action: "Tune randomly" },
+        { input: "BAR MIDDLE", action: "Open or close" },
         { input: "BAR RIGHT", action: "Stop playback" },
         { input: "BAR WHEEL", action: "Change volume" },
-        { input: "SPEAKER", action: "Choose audio output" }
+        { input: "SPEAKER", action: "Audio output unavailable in v2" }
       ]
     }
   ]
@@ -170,16 +161,7 @@ Item {
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
-  function registerWindowSetup() {
-    windowSetupReady = false
-    if (!windowSetupProcess.running) windowSetupProcess.running = true
-  }
-
   function open(payloadJson) {
-    if (!windowSetupReady) {
-      pendingOpenPayload = payloadJson || "{}"
-      return
-    }
     openWindow(payloadJson)
   }
 
@@ -188,8 +170,6 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") } catch (error) { payload = ({}) }
 
     opened = true
-    windowFrameReady = false
-    windowRevealTimer.stop()
     panel.visible = true
     fetchError = ""
     loadState()
@@ -206,8 +186,6 @@ Item {
     outputMenuOpen = false
     globe.stopKineticRotation(true)
     opened = false
-    windowFrameReady = false
-    windowRevealTimer.stop()
     panel.visible = false
     worldExpandTimer.stop()
     if (worldExpandProcess.running) worldExpandProcess.running = false
@@ -215,32 +193,7 @@ Item {
 
   function dismiss() {
     close()
-    if (shell && typeof shell.hide === "function")
-      shell.hide((manifest && manifest.id) || "akshar.radio-atlas")
-  }
-
-  function scheduleWindowReveal() {
-    if (windowFrameReady || !panel.visible || !panel.backingWindowVisible) return
-    windowRevealTimer.restart()
-  }
-
-  function handleHyprlandEvent(event) {
-    var eventName = String(event && event.name || "")
-    if (eventName === "configreloaded") {
-      windowSetupReloadTimer.restart()
-      return
-    }
-    if (!opened || eventName !== "openwindow") return
-    var parts = []
-    try {
-      parts = event.parse(4)
-    } catch (error) {
-      parts = String(event && event.data || "").split(",")
-    }
-    var windowClass = String(parts[2] || "")
-    if (windowClass === "org.omarchy.screensaver") {
-      dismiss()
-    }
+    runtime.requestSurfaceIntent("atlas", "dismiss")
   }
 
   function highlightStationCountry(station, focusGlobe) {
@@ -476,6 +429,7 @@ Item {
 
   function playStation(station, scope, stations) {
     if (!station) return
+    if (!canPlay) { playerError = "Playback permission was not granted"; return }
     if (playerActionBusy) {
       pendingPlayStation = station
       pendingPlayScope = scope
@@ -511,6 +465,7 @@ Item {
   }
 
   function playerAction(action) {
+    if (!canControl) { playerError = "Playback control permission was not granted"; return }
     if (playerActionBusy) return
     playerError = ""
     playerActionProcess.action = action
@@ -521,6 +476,7 @@ Item {
   }
 
   function stopPlayer() {
+    if (!canControl) { playerError = "Playback control permission was not granted"; return }
     cancelPendingPlay()
     if (stopProcess.running || playCancellationRequested) return
     if (playerActionProcess.running && !playPreparing) return
@@ -584,6 +540,7 @@ Item {
   }
 
   function setPlayerVolume(value) {
+    if (!canControl) { playerError = "Playback control permission was not granted"; return }
     pendingVolume = Math.max(0, Math.min(100, Math.round(value)))
     playerVolume = pendingVolume
     playerError = ""
@@ -749,22 +706,17 @@ Item {
     return "No working stations found."
   }
 
-  FileView {
-    path: Qt.resolvedUrl("assets/countries.json").toString().replace(/^file:\/\//, "")
-    watchChanges: false
-    printErrors: true
-    onLoaded: {
+  function loadCountries() {
       try {
-        var collection = JSON.parse(text())
+        var collection = JSON.parse(runtime.readPackagedText("assets/countries.json", 524288))
         root.countries = Array.isArray(collection.features) ? collection.features : []
       } catch (error) {
         root.countries = []
         root.fetchError = "Map data could not be loaded"
       }
-    }
   }
 
-  FileView {
+  RadioFileView {
     path: root.statusReady ? root.statusPath : ""
     watchChanges: true
     atomicWrites: true
@@ -773,7 +725,7 @@ Item {
     onFileChanged: reload()
   }
 
-  FileView {
+  RadioFileView {
     id: playSelectionFile
     path: root.playSelectionPath
     preload: false
@@ -784,7 +736,7 @@ Item {
     onSaveFailed: root.playerError = "Could not prepare this station"
   }
 
-  FileView {
+  RadioFileView {
     id: favoriteSelectionFile
     path: root.favoriteSelectionPath
     preload: false
@@ -795,19 +747,7 @@ Item {
     onSaveFailed: root.localError = "Favorite could not be updated"
   }
 
-  Process {
-    id: windowSetupProcess
-    command: [root.windowPath, String(root.preferredWidth), String(root.preferredHeight)]
-    onExited: function(exitCode) {
-      root.windowSetupReady = true
-      if (!root.pendingOpenPayload) return
-      var payload = root.pendingOpenPayload
-      root.pendingOpenPayload = ""
-      root.openWindow(payload)
-    }
-  }
-
-  Process {
+  RadioProcess {
     id: statusInitProcess
     command: []
     onExited: function(exitCode) {
@@ -815,14 +755,14 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: fetchProcess
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: root.fetchOutput = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: root.fetchStderr = text
     }
@@ -894,10 +834,10 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: worldExpandProcess
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: root.worldExpandOutput = text
     }
@@ -931,17 +871,17 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: volumeProcess
     property int submittedVolume: -1
     property string output: ""
     property string errorOutput: ""
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: volumeProcess.output = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: volumeProcess.errorOutput = text
     }
@@ -969,16 +909,16 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: outputsProcess
     property string output: ""
     property string errorOutput: ""
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: outputsProcess.output = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: outputsProcess.errorOutput = text
     }
@@ -1013,17 +953,17 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: outputProcess
     property string submittedOutput: ""
     property string output: ""
     property string errorOutput: ""
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: outputProcess.output = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: outputProcess.errorOutput = text
     }
@@ -1039,17 +979,17 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: playerActionProcess
     property string action: ""
     property string output: ""
     property string errorOutput: ""
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: playerActionProcess.output = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: playerActionProcess.errorOutput = text
     }
@@ -1066,7 +1006,7 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: stopProcess
     command: []
     onExited: function(exitCode) {
@@ -1076,17 +1016,17 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: stateProcess
     property string action: ""
     property string output: ""
     property string errorOutput: ""
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: stateProcess.output = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: stateProcess.errorOutput = text
     }
@@ -1114,16 +1054,16 @@ Item {
     }
   }
 
-  Process {
+  RadioProcess {
     id: historyProcess
     property string output: ""
     property string errorOutput: ""
     command: []
-    stdout: StdioCollector {
+    stdout: RadioOutput {
       waitForEnd: true
       onStreamFinished: historyProcess.output = text
     }
-    stderr: StdioCollector {
+    stderr: RadioOutput {
       waitForEnd: true
       onStreamFinished: historyProcess.errorOutput = text
     }
@@ -1166,22 +1106,6 @@ Item {
   }
 
   Timer {
-    id: windowSetupReloadTimer
-    interval: 100
-    repeat: false
-    onTriggered: root.registerWindowSetup()
-  }
-
-  Timer {
-    id: windowRevealTimer
-    interval: 50
-    repeat: false
-    onTriggered: {
-      if (panel.visible && panel.backingWindowVisible) root.windowFrameReady = true
-    }
-  }
-
-  Timer {
     id: volumeTimer
     interval: 90
     repeat: false
@@ -1189,33 +1113,14 @@ Item {
   }
 
   Component.onCompleted: {
-    registerWindowSetup()
+    root.loadCountries()
     statusInitProcess.command = [playerPath, "status"]
     statusInitProcess.running = true
   }
 
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) { root.handleHyprlandEvent(event) }
-  }
-
-  FloatingWindow {
+  Item {
     id: panel
-    visible: false
-    title: "Radio Atlas"
-    color: root.background
-    implicitWidth: root.preferredWidth
-    implicitHeight: root.preferredHeight
-    minimumSize: Qt.size(Style.space(800), Style.space(560))
-    HyprlandWindow.opacity: root.windowFrameReady ? 1 : 0
-
-    onVisibleChanged: {
-      if (visible) root.scheduleWindowReveal()
-      if (!visible && root.opened) root.dismiss()
-    }
-    onBackingWindowVisibleChanged: root.scheduleWindowReveal()
-    onWidthChanged: root.scheduleWindowReveal()
-    onHeightChanged: root.scheduleWindowReveal()
+    anchors.fill: parent
 
     BorderSurface {
       id: card
@@ -1766,7 +1671,7 @@ Item {
               Button {
                 iconText: "\uf048"
                 tooltipText: "Previous station"
-                enabled: root.playerRunning && !root.playerActionBusy
+                enabled: root.canControl && root.playerRunning && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1776,7 +1681,7 @@ Item {
                 iconText: root.playerRunning && !root.playerPaused ? "\uf04c" : "\uf04b"
                 tooltipText: root.streamError ? "Retry station"
                   : root.playerRunning && !root.playerPaused ? "Pause" : "Play"
-                enabled: !root.playerActionBusy
+                enabled: (root.playerRunning ? root.canControl : root.canPlay) && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1785,7 +1690,7 @@ Item {
               Button {
                 iconText: "\uf051"
                 tooltipText: "Next station"
-                enabled: root.playerRunning && !root.playerActionBusy
+                enabled: root.canControl && root.playerRunning && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1794,7 +1699,7 @@ Item {
               Button {
                 iconText: "\uf04d"
                 tooltipText: "Stop"
-                enabled: (root.playerRunning || root.playPreparing)
+                enabled: root.canControl && (root.playerRunning || root.playPreparing)
                   && !stopProcess.running
                   && !root.playCancellationRequested
                   && (!playerActionProcess.running || root.playPreparing)
@@ -1818,11 +1723,9 @@ Item {
                 id: outputButton
                 anchors.verticalCenter: parent.verticalCenter
                 iconText: "\uf0a1"
-                tooltipText: root.playerOutput
-                  ? "Audio output: " + root.outputLabel(root.playerOutput)
-                  : "Choose audio output"
+                tooltipText: "Audio output selection is unavailable in v2"
                 active: root.playerOutput !== ""
-                enabled: !stopProcess.running && !outputProcess.running
+                enabled: false
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1834,7 +1737,7 @@ Item {
                 iconText: root.playerMuted || root.playerVolume === 0 ? "\uf026" : "\uf028"
                 tooltipText: root.playerMuted ? "Unmute" : "Mute (M)"
                 active: root.playerMuted
-                enabled: root.playerRunning && !root.playerActionBusy
+                enabled: root.canControl && root.playerRunning && !root.playerActionBusy
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1855,7 +1758,7 @@ Item {
                 fillColor: root.accent
                 knobColor: root.foreground
                 tickColor: root.background
-                enabled: !stopProcess.running
+                enabled: root.canControl && !stopProcess.running
                 Accessible.name: "Radio volume"
                 onMoved: function(nextVolume) { root.setPlayerVolume(nextVolume) }
                 onRightClicked: root.playerAction("mute")
@@ -1943,7 +1846,6 @@ Item {
                   id: outputOption
                   required property var modelData
                   width: ListView.view.width
-                  leftAlign: true
                   text: outputOption.modelData.label
                   selected: outputOption.modelData.id === root.playerOutput
                   focusable: true

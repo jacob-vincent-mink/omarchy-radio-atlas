@@ -26,10 +26,27 @@ jobs:
           sudo apt-get install --yes bubblewrap iproute2 jq lua5.4 mpv python3 ripgrep socat
           sudo apt-get install --yes qt6-declarative-dev-tools qml6-module-qttest \
             qml6-module-qtquick qml6-module-qtquick-window qml6-module-qtqml-workerscript \
-            qml6-module-qtqml-models
+            qml6-module-qtqml-models qml6-module-qtqml qml6-module-qtquick-controls \
+            qml6-module-qtquick-layouts qml6-module-qtquick-templates
+
+      - name: Check out the runtime presentation test dependency
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: jacob-vincent-mink/omarchy
+          ref: 3422da98406a3fdd11b1a92bd19681116b27b531
+          path: .runtime-reference
+          sparse-checkout: native/plugin-runtime/presentation/qml
+
+      - name: Expose the presentation module to tests
+        run: |
+          mkdir -p .runtime-qml/Omarchy
+          ln -s "$GITHUB_WORKSPACE/.runtime-reference/native/plugin-runtime/presentation/qml" .runtime-qml/Omarchy/PluginPresentation
 
       - name: Allow Bubblewrap user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Run tests
+        env:
+          QML2_IMPORT_PATH: ${{ github.workspace }}/.runtime-qml
+          QT_QUICK_CONTROLS_STYLE: Basic
         run: ./tests/run
