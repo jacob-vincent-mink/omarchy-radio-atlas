@@ -1,13 +1,10 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
-import qs.Commons
-import qs.Ui
+import Omarchy.PluginPresentation 1.0
 
-BarWidget {
+Item {
   id: root
 
-  moduleName: "akshar.radio-atlas"
+  property var inputRegions: [{x: 0, y: 0, width: width, height: height}]
 
   property bool playerRunning: false
   property bool playerPaused: false
@@ -18,8 +15,10 @@ BarWidget {
   property int pendingVolume: -1
   property string playerTitle: ""
   property bool statusReady: false
+  readonly property bool canPlay: runtime.hasPermission("media.play-stream", "play")
+  readonly property bool canControl: runtime.hasPermission("media.play-stream", "control")
   readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
-  readonly property string statusPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas/status.json"
+  readonly property string statusPath: "radio-status"
 
   function singleLineText(value, limit) {
     return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, limit)
@@ -49,12 +48,14 @@ BarWidget {
   }
 
   function runPlayerAction(action) {
+    if (!canControl) return
     if (actionProcess.running) return
     actionProcess.command = [root.playerPath, action]
     actionProcess.running = true
   }
 
   function changeVolume(delta) {
+    if (!canControl) return
     var current = pendingVolume >= 0 ? pendingVolume : playerVolume
     pendingVolume = Math.max(0, Math.min(100, current + (delta > 0 ? 5 : -5)))
     playerVolume = pendingVolume
@@ -68,10 +69,10 @@ BarWidget {
     volumeProcess.running = true
   }
 
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
+  implicitWidth: Style.bar.statusSlot
+  implicitHeight: Style.bar.size
 
-  FileView {
+  RadioFileView {
     path: root.statusReady ? root.statusPath : ""
     watchChanges: true
     atomicWrites: true
@@ -80,7 +81,7 @@ BarWidget {
     onFileChanged: reload()
   }
 
-  Process {
+  RadioProcess {
     id: statusInitProcess
     command: []
     onExited: function(exitCode) {
@@ -88,7 +89,7 @@ BarWidget {
     }
   }
 
-  Process {
+  RadioProcess {
     id: actionProcess
     command: []
     onExited: function(exitCode) {
@@ -96,7 +97,7 @@ BarWidget {
     }
   }
 
-  Process {
+  RadioProcess {
     id: volumeProcess
     property int submittedVolume: -1
     command: []
@@ -127,33 +128,47 @@ BarWidget {
     statusInitProcess.running = true
   }
 
-  WidgetButton {
+  Rectangle {
     id: button
     anchors.fill: parent
-    bar: root.bar
-    text: "\uf0ac"
-    active: root.playerRunning && !root.playerPaused
-    tooltipText: root.playerRunning
+    color: "transparent"
+    opacity: root.canPlay && root.playerRunning && !root.playerPaused ? 1 : 0.6
+    property string tooltipText: root.playerRunning
       ? (root.streamError ? root.streamError + ": " : root.playerPaused ? "Radio paused: " : "Playing: ")
         + root.safeTooltipText(root.playerTitle)
         + "  ·  " + (root.playerMuted ? "muted" : root.playerVolume + "%")
       : "Open Radio Atlas"
 
-    onPressed: function(mouseButton) {
-      if (!root.bar) return
-      if (mouseButton === Qt.RightButton) {
-        root.runPlayerAction("stop")
-        return
-      }
-      if (mouseButton === Qt.MiddleButton) {
-        root.bar.run("omarchy-shell shell summon akshar.radio-atlas '{\"action\":\"random\"}'")
-        return
-      }
-      root.bar.run("omarchy-shell shell toggle akshar.radio-atlas")
+    Text {
+      anchors.centerIn: parent
+      text: "\uf0ac"
+      color: Color.bar.text
+      font.family: Style.font.family
+      font.pixelSize: Style.font.icon
     }
 
-    onWheelMoved: function(delta) {
-      root.changeVolume(delta)
+    MouseArea {
+      id: pointer
+      anchors.fill: parent
+      hoverEnabled: true
+      acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+      onPressed: function(mouse) {
+        if (mouse.button === Qt.RightButton) root.runPlayerAction("stop")
+        else runtime.requestSurfaceIntent("atlas", "toggle")
+      }
+    }
+
+    WheelHandler {
+      target: null
+      enabled: root.canControl
+      onWheel: function(event) { root.changeVolume(event.angleDelta.y) }
+    }
+
+    ToolTip {
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.top
+      text: button.tooltipText
+      shown: pointer.containsMouse
     }
   }
 }

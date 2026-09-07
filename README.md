@@ -1,5 +1,11 @@
 # Radio Atlas
 
+> Draft schema-v2 migration for [Omarchy PR #8956](https://github.com/omacom/omarchy/pull/8956), not a schema-v1 installation update. Requires the opt-in runtime and exact trusted network/media/storage contracts. The original globe, station model, assets, and helper programs remain; QML uses plugin-local broker adapters instead of executing those helpers. Source/model tests and mocked offscreen component tests are not proof of live playback or visual parity.
+
+The migration preserves progressive loading, local selection, remote search/country requests, playlists, and favorite/recent resolution in the plugin adapter. Media and storage are optional. Each network response remains bounded by the provider; large responses may be rejected. Local request cancellation discards stale replies but does not cancel an already admitted external effect. The worker has no screensaver-event feed, bar middle click now toggles the atlas, and global MPRIS control/automatic failed-stream skipping are not provided by the broker adapter. Audio-output selection is disabled because the provider has no such operation; use the desktop's normal audio controls. Existing screenshots and schema-v1 install instructions below describe the original release.
+
+Run `bash tests/run` for the retained regression suite. With the runtime's `Omarchy.PluginPresentation` module on the import path, `qmltestrunner -input tests/tst_runtime_adapter.qml` checks the current broker API and loads both surfaces offscreen. This branch does not bundle that SDK.
+
 Explore live radio on a rotatable globe from the Omarchy bar. Click a station
 signal to play it, or click a country to browse its stations. Playback runs in
 Omarchy's existing `mpv` and `mpv-mpris` setup, so `omarchy.media` provides the

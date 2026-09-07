@@ -1,0 +1,2 @@
+singleton RadioSessionState 1.0 RadioSessionState.qml
+singleton RadioStorage 1.0 RadioStorage.qml
