@@ -143,10 +143,10 @@ BarWidget {
         return
       }
       if (mouseButton === Qt.MiddleButton) {
-        root.bar.run("omarchy-shell shell summon akshar.radio-atlas '{\"action\":\"random\"}'")
+        root.bar.shell.summon(root.moduleName, JSON.stringify({ action: "random" }))
         return
       }
-      root.bar.run("omarchy-shell shell toggle akshar.radio-atlas")
+      root.bar.shell.toggle(root.moduleName)
     }
 
     onWheelMoved: function(delta) {
