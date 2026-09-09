@@ -5,24 +5,25 @@
   "version": "0.1.4",
   "author": "Akshar Patel",
   "license": "MIT",
-  "description": "Explore live radio on a rotatable globe and play stations through Omarchy's media controls.",
+  "description": "Explore live radio on a rotatable globe with sandboxed playback.",
   "homepage": "https://github.com/AksharP5/omarchy-radio-atlas",
   "repository": "https://github.com/AksharP5/omarchy-radio-atlas",
   "keywords": [
     "radio",
     "world",
     "globe",
-    "music",
-    "mpris"
+    "music"
   ],
   "kinds": [
     "overlay",
-    "bar-widget"
+    "bar-widget",
+    "service"
   ],
   "keepLoaded": true,
   "entryPoints": {
     "overlay": "RadioAtlas.qml",
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
   },
   "barWidget": {
     "displayName": "Radio Atlas",
@@ -37,164 +38,8 @@
       "storage": {
         "required": true
       },
-      "network": true,
-      "filesystem": [
-        {
-          "name": "player-status",
-          "access": "read"
-        }
-      ],
-      "exec": {
-        "radio-session": {
-          "executable": "/usr/local/bin/radio-atlas-ward-host",
-          "lifetime": "plugin",
-          "tree": {
-            "next": [
-              {
-                "arg": {
-                  "kind": "exact",
-                  "value": "$OMARCHY_PLUGIN_DATA"
-                },
-                "then": {
-                  "next": [
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "serve"
-                      },
-                      "then": {
-                        "next": [
-                          {
-                            "arg": {
-                              "kind": "integer",
-                              "min": 0,
-                              "max": 100
-                            },
-                            "then": {
-                              "end": "session"
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        "radio-control": {
-          "executable": "/usr/local/bin/radio-atlas-ward-host",
-          "tree": {
-            "next": [
-              {
-                "arg": {
-                  "kind": "exact",
-                  "value": "$OMARCHY_PLUGIN_DATA"
-                },
-                "then": {
-                  "next": [
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "status"
-                      },
-                      "then": {
-                        "end": "status"
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "toggle"
-                      },
-                      "then": {
-                        "end": "toggle"
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "previous"
-                      },
-                      "then": {
-                        "end": "previous"
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "next"
-                      },
-                      "then": {
-                        "end": "next"
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "mute"
-                      },
-                      "then": {
-                        "end": "mute"
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "stop"
-                      },
-                      "then": {
-                        "end": "stop"
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "volume"
-                      },
-                      "then": {
-                        "next": [
-                          {
-                            "arg": {
-                              "kind": "integer",
-                              "min": 0,
-                              "max": 100
-                            },
-                            "then": {
-                              "end": "volume"
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "arg": {
-                        "kind": "exact",
-                        "value": "play"
-                      },
-                      "then": {
-                        "next": [
-                          {
-                            "arg": {
-                              "kind": "pattern",
-                              "value": "[0-9A-Fa-f-]{20,64}",
-                              "max": 64
-                            },
-                            "then": {
-                              "end": "play"
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      }
+      "networkProxy": true,
+      "audioPlayback": true
     }
   }
 }

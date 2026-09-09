@@ -12,6 +12,8 @@ Item {
 
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var shell: null
+  readonly property var playerService: shell ? shell.serviceFor("akshar.radio-atlas") : null
+  onPlayerServiceChanged: { if (playerService) applyPlayerState(playerService.playerState) }
   property var manifest: null
 
   property bool opened: false
@@ -69,7 +71,6 @@ Item {
   readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
   readonly property string statePath: Qt.resolvedUrl("radio-state").toString().replace(/^file:\/\//, "")
   readonly property string runtimePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas"
-  readonly property string statusPath: "/grants/player-status/status.json"
   readonly property string playSelectionPath: runtimePath + "/play-selection.json"
   readonly property string favoriteSelectionPath: runtimePath + "/favorite-selection.json"
 
@@ -614,13 +615,12 @@ Item {
     }
   }
 
-  FileView {
-    path: root.statusReady ? root.statusPath : ""
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.applyPlayerState(text())
-    onFileChanged: reload()
+  Connections {
+    target: root.playerService
+    function onPlayerStateChanged() { root.applyPlayerState(root.playerService.playerState) }
+    function onSessionErrorChanged() {
+      if (root.playerService.sessionError) root.playerError = root.playerService.sessionError
+    }
   }
 
   FileView {

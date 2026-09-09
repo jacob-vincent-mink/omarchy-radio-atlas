@@ -1,51 +1,39 @@
 # Ward compatibility branch
 
-This branch retains Radio Atlas's original globe, catalog/search/cache helpers, station model, state files, player controls, stream proxy and mpv status script. It requires the Ward preview with reviewed `lifetime: "plugin"` foreground jobs and host-owned screensaver dismissal. This is a fork PR, not a change to the original author's repository.
+This branch retains Radio Atlas's globe, catalog/search/cache helpers, station model, saved state, player controls and mpv status script. It requires Ward's `networkProxy` and `audioPlayback` permissions and the shared service runtime. This is a fork PR, not a change to the original author's repository.
 
 ## Permissions and boundaries
 
-- Required private storage holds favorites, history, volume and caches. Worker-local `HOME/.local/share/radio-atlas/state.json` is the same file as the host's plugin DATA path plus `.local/share/radio-atlas/state.json`. Existing unsandboxed saves are not imported automatically.
-- Optional networking lets the original catalog helper contact Radio Browser, refresh its caches and report station clicks. Ward's network grant is broad, including local services; it is not a domain allowlist.
-- The optional `player-status` folder is read-only and should point to `~/.local/state/radio-atlas-ward/status`. Both original UI surfaces watch its atomically replaced `status.json`; there is no status-polling loop.
-- The installed `radio-atlas-ward-host` CLI accepts only the enumerated controls and bounded volume/station arguments. The worker supplies one fixed JSON selection through DATA. The CLI refuses symlinks, special files, oversized selections and non-HTTP(S) stream URLs. No plugin-supplied code path, command, player socket or process ID is accepted.
-- `radio-session:session` is an explicitly reviewed long-running foreground job. The bar owns its QML Process; closing the panel leaves playback alive, while stopping the caller, disabling/revoking the plugin or stopping its controller kills the entire job group. Other controls retain the ordinary ten-second deadline and share the second exec slot.
+- Required private storage holds favorites, history, volume and caches under the sandbox's home. Existing unsandboxed saves are not imported automatically.
+- Optional `networkProxy` lets sandboxed curl/mpv contact public Internet destinations through Ward's HTTP/CONNECT proxy. It includes opaque TCP tunnels and can transmit data; it is not a domain or URL allowlist. Direct networking and local/private destinations remain unavailable.
+- Optional `audioPlayback` accepts PCM samples decoded by mpv inside the worker. It grants neither microphone input nor capture of other applications' audio.
+- There are no host-exec grants and no `player-status` filesystem grant. The former installed host component is no longer used by this manifest. No privileged installation is needed.
 
-The user-installed host component contains the original player/session/proxy code at a fixed path. It retains mpv's host audio and MPRIS integration, including the original bounded public-destination network proxy. Private player sockets, locks, queue files and process tracking live under `$XDG_RUNTIME_DIR/radio-atlas-ward`, never in worker-writable DATA. Stop empties the playlist but keeps the supervised mpv session idle for another station.
+One `Service.qml` owns the foreground player process and watches the sandbox-local `status.json`. All bar placements share that service, and the panel consumes its cached status. Closing the panel or removing one bar placement does not stop another placement's player. Disabling/revoking the plugin or stopping its worker stops playback. Stop empties the playlist while leaving the one supervised session idle for another station.
 
-Ward pins the installed CLI's bytes, not its interpreter, dependencies or adjacent installed player files. Installing or updating this host component is a separate user-authorized setup operation. A plugin update or approval never installs or replaces it.
+The sandboxed session uses Ward's existing private network namespace and localhost proxy. It never calls the older nested-namespace wrapper. The original `radio-proxy`/`radio-sandbox` implementation remains only for the trusted/non-Ward path and its upstream regression tests; it is not Ward's security boundary. Decoding, volume, mute, playlists and player IPC remain inside the worker. Ward's host audio backend receives only fixed-format PCM, never a station URL or plugin-supplied filename.
 
-## Install the host component
+Publishing a player to desktop MPRIS controls is not included in these permissions. The panel and bar controls work locally; the old host player's MPRIS behavior is not claimed for this adaptation.
 
-From this reviewed checkout, in a terminal:
+## Review and enable
 
-```bash
-sudo install -d -m755 /usr/local/lib/radio-atlas-ward
-sudo install -m644 radio-player radio-session radio-sandbox radio-state radio-proxy radio-status.lua manifest.json /usr/local/lib/radio-atlas-ward/
-sudo chmod 755 /usr/local/lib/radio-atlas-ward/radio-player /usr/local/lib/radio-atlas-ward/radio-session /usr/local/lib/radio-atlas-ward/radio-sandbox /usr/local/lib/radio-atlas-ward/radio-state
-sudo install -m755 radio-host /usr/local/bin/radio-atlas-ward-host
-install -d -m700 "$HOME/.local/state/radio-atlas-ward/status"
-```
-
-Install this fork's `rust-sandbox-compat` branch through the usual plugin workflow. Review the immutable revision, then select the desired grants. For full functionality:
+Use a matching native Ward build and freshly staged shared runtime. Install this fork's `rust-sandbox-compat` branch through the usual plugin workflow, then review the immutable revision. For catalog access and playback:
 
 ```bash
 omarchy plugin review akshar.radio-atlas
 omarchy plugin approve akshar.radio-atlas --revision <reviewed-revision> \
-  --allow-storage --allow-network \
-  --read "player-status=$HOME/.local/state/radio-atlas-ward/status" \
-  --exec radio-session:session \
-  --exec radio-control:status --exec radio-control:play \
-  --exec radio-control:toggle --exec radio-control:previous --exec radio-control:next \
-  --exec radio-control:mute --exec radio-control:stop --exec radio-control:volume
+  --allow-storage --allow-network-proxy --allow-audio-playback
 omarchy plugin enable akshar.radio-atlas
 ```
 
-Review again after changing the bundle or installed CLI. Stop the plugin before reapproval. Review is not activation, and declaring access does not select it.
+Stop the plugin before reapproval, and review again after bundle changes. Requests are not grants. Declining playback or proxy access keeps the local UI available but prevents a live playback session. These permissions do not include microphone or system-output recording.
 
 ## Verification
 
-The original regression suite passes, including catalog caching/fallback, saved-state validation, player cancellation and proxy destination restrictions. Temporary external Ward trials exercised the original UI with declined grants, real catalog browsing/search, silent live playback beyond ten seconds, event-driven metadata, keyboard pause and Escape, mute/volume, previous/next, favorites/history and rejection of extra or invalid control arguments. Revocation was verified against the actual mpv process, not just the controller's status. Separate selection checks reject symlinked files/directories, FIFOs, oversized JSON and unsafe URL schemes. These experiments are not shipped as tests in either repository.
+The new adaptation passed repeated bounded private-display trials with the matching native runtime and staged adapter. The original catalog populated through Ward's proxy, and sandbox-local mpv streamed a live HTTPS station into Ward's PCM endpoint for more than ten seconds. A private synthetic PipeWire output received nonzero samples. Pause/resume updated the original status script and panel; removing a second bar placement left the one shared decoder and surviving widget running. Revocation removed every tracked controller, worker, decoder, audio backend and proxy process. The rendered globe, catalog and playing panel were inspected.
 
-The installed desktop was checked at 1600×1000 logical pixels with scale 2: original globe/catalog, search and rotation, bar opening, one-click keyboard focus, Escape, programmatic opening and outside-click dismissal. The host retains bar placement across restart and dismisses the panel on screensaver launch without forwarding compositor events. Playback tests were silent; audible speaker output was not tested. The local screensaver exited immediately even with plugin panels closed, so sustained screensaver display is not claimed here.
+With proxy and playback declined, the UI still loaded, reported missing playback/proxy access, created no decoder or audio backend, and produced no samples. The test's synthetic audio server had no real hardware source or sink; no speakers, microphone or desktop audio were used. These checks do not claim every station protocol, physical output or MPRIS publication.
 
-The original README's unsandboxed removal and state paths do not apply to this branch. `omarchy plugin disable akshar.radio-atlas` stops the supervised player; private saved data is retained. Host diagnostics are in `$XDG_RUNTIME_DIR/radio-atlas-ward/omarchy-radio-atlas/mpv.log` and `proxy.log`.
+The earlier compatibility trials covered the former host-exec adapter: original globe/catalog, search and rotation, keyboard focus, Escape, outside-click dismissal, silent live playback, volume/mute, previous/next, favorites/history and revocation. Those historical results are not evidence for the new PCM/proxy transport.
+
+The original README's unsandboxed removal and state paths do not apply to Ward. `omarchy plugin disable akshar.radio-atlas` stops its worker; private saved data is retained. Player diagnostics now live inside the worker at `$XDG_RUNTIME_DIR/omarchy-radio-atlas/mpv.log`, not in the former host component's directories.

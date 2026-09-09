@@ -132,7 +132,7 @@ send_command() {
   [[ -S $socket ]] || return 1
   payload=$(jq -c --argjson requestId "$request_id" '. + {request_id: $requestId}' <<< "$payload") || return 1
   response=$(printf '%s\n' "$payload" \
-    | socat -T 1 - "UNIX-CONNECT:$socket" 2>/dev/null \
+    | socat -t 3 -T 3 - "UNIX-CONNECT:$socket" 2>/dev/null \
     | head -c "$((max_ipc_bytes + 1))") || return 1
   (( $(printf '%s' "$response" | wc -c) <= max_ipc_bytes )) || return 1
   jq -e --argjson requestId "$request_id" \
@@ -476,7 +476,7 @@ serve_player() {
   persist_volume "${2:-70}"
   export RADIO_ATLAS_STATUS_FILE="$status_file"
   export RADIO_ATLAS_QUEUE_FILE="$queue_file"
-  # The foreground session and every proxy/player descendant belong to Ward's job.
+  # The foreground session and its decoder belong to the plugin worker.
   # Controls use the separate player lock; never hold it for the session lifetime.
   exec 8>&-
   exec "$script_dir/radio-session" mpv \
