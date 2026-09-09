@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
@@ -67,10 +66,10 @@ Item {
   property string pendingRecentUuid: ""
 
   readonly property string fetchPath: Qt.resolvedUrl("radio-fetch").toString().replace(/^file:\/\//, "")
-  readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
+  readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
   readonly property string statePath: Qt.resolvedUrl("radio-state").toString().replace(/^file:\/\//, "")
   readonly property string runtimePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas"
-  readonly property string statusPath: runtimePath + "/status.json"
+  readonly property string statusPath: "/grants/player-status/status.json"
   readonly property string playSelectionPath: runtimePath + "/play-selection.json"
   readonly property string favoriteSelectionPath: runtimePath + "/favorite-selection.json"
 
@@ -133,17 +132,6 @@ Item {
     close()
     if (shell && typeof shell.hide === "function")
       shell.hide((manifest && manifest.id) || "akshar.radio-atlas")
-  }
-
-  function handleHyprlandEvent(event) {
-    if (!opened || String(event && event.name || "") !== "openwindow") return
-    var parts = []
-    try {
-      parts = event.parse(4)
-    } catch (error) {
-      parts = String(event && event.data || "").split(",")
-    }
-    if (String(parts[2] || "") === "org.omarchy.screensaver") dismiss()
   }
 
   function highlightStationCountry(station, focusGlobe) {
@@ -955,11 +943,6 @@ Item {
   Component.onCompleted: {
     statusInitProcess.command = [playerPath, "status"]
     statusInitProcess.running = true
-  }
-
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) { root.handleHyprlandEvent(event) }
   }
 
   PanelWindow {

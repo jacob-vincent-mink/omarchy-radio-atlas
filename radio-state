@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 : "${XDG_RUNTIME_DIR:?Radio Atlas requires XDG_RUNTIME_DIR}"
-runtime_dir="$XDG_RUNTIME_DIR/omarchy-radio-atlas"
-data_root=${XDG_DATA_HOME:-$HOME/.local/share}
+runtime_dir=${RADIO_ATLAS_RUNTIME_DIR:-$XDG_RUNTIME_DIR/omarchy-radio-atlas}
+data_root=${RADIO_ATLAS_DATA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}
 state_dir="$data_root/radio-atlas"
 state_file="$state_dir/state.json"
 state_lock="$state_dir/state.lock"

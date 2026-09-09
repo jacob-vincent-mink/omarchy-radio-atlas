@@ -1,5 +1,7 @@
 # Radio Atlas
 
+This fork's `rust-sandbox-compat` branch uses Ward. See [PORT.md](PORT.md) for its reviewed permissions, separate host-player installation, private save paths and verification status; the original installation/removal instructions below describe the unsandboxed release.
+
 Explore live radio on a rotatable globe from the Omarchy bar. Click a station
 signal to play it, or click a country to browse its stations. Playback runs in
 Omarchy's existing `mpv` and `mpv-mpris` setup, so `omarchy.media` provides the

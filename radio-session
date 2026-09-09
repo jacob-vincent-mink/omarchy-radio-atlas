@@ -4,7 +4,7 @@ umask 077
 
 : "${XDG_RUNTIME_DIR:?Radio Atlas requires XDG_RUNTIME_DIR}"
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-runtime_dir="$XDG_RUNTIME_DIR/omarchy-radio-atlas"
+runtime_dir=${RADIO_ATLAS_RUNTIME_DIR:-$XDG_RUNTIME_DIR/omarchy-radio-atlas}
 proxy_socket="$runtime_dir/proxy.sock"
 proxy_pid=""
 sandbox_pid=""

@@ -99,13 +99,8 @@ rg -Fq 'estimatedLocation === true' "$project_dir/Globe.qml"
 sed -n '/function paintGlobe/,/^  }/p' "$project_dir/Globe.qml" \
   | rg -Fq 'if (!isFinite(globeRadius) || globeRadius <= 0) return'
 rg -q 'WlrLayershell.keyboardFocus: root.opened' "$project_dir/RadioAtlas.qml"
-rg -q '^import Quickshell.Hyprland$' "$project_dir/RadioAtlas.qml"
-sed -n '/function handleHyprlandEvent/,/^  }/p' "$project_dir/RadioAtlas.qml" \
-  | rg -Fq 'event.parse(4)'
-sed -n '/function handleHyprlandEvent/,/^  }/p' "$project_dir/RadioAtlas.qml" \
-  | rg -Fq 'org.omarchy.screensaver'
-sed -n '/function handleHyprlandEvent/,/^  }/p' "$project_dir/RadioAtlas.qml" \
-  | rg -Fq 'dismiss()'
+# Ward's trusted host owns screensaver dismissal; no raw compositor connection.
+! rg -q '^import Quickshell.Hyprland$' "$project_dir/RadioAtlas.qml"
 rg -q 'keyboardSelectionVisible' "$project_dir/RadioAtlas.qml"
 rg -q 'reportedVolume' "$project_dir/RadioAtlas.qml"
 rg -q 'submittedVolume' "$project_dir/RadioAtlas.qml"

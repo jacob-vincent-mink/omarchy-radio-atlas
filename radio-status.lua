@@ -74,7 +74,8 @@ local function current_status()
   local volume = mp.get_property_number("volume", last_volume)
   last_volume = math.floor(volume + 0.5)
   return {
-    running = true,
+    running = os.getenv("RADIO_ATLAS_SUPERVISED") ~= "true"
+      or mp.get_property_number("playlist-count", 0) > 0,
     paused = mp.get_property_bool("pause", false),
     muted = mp.get_property_bool("mute", false),
     title = clean_text(mp.get_property("media-title", ""), 512),

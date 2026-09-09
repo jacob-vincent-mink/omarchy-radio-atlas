@@ -17,8 +17,8 @@ BarWidget {
   property int pendingVolume: -1
   property string playerTitle: ""
   property bool statusReady: false
-  readonly property string playerPath: Qt.resolvedUrl("radio-player").toString().replace(/^file:\/\//, "")
-  readonly property string statusPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas/status.json"
+  readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
+  readonly property string statusPath: "/grants/player-status/status.json"
 
   function singleLineText(value, limit) {
     return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, limit)
@@ -76,6 +76,12 @@ BarWidget {
     printErrors: false
     onLoaded: root.applyPlayerState(text())
     onFileChanged: reload()
+  }
+
+  Process {
+    id: sessionProcess
+    command: [root.playerPath, "session"]
+    running: true
   }
 
   Process {

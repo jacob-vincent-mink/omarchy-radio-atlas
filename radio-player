@@ -3,15 +3,15 @@ set -euo pipefail
 umask 077
 
 : "${XDG_RUNTIME_DIR:?Radio Atlas requires XDG_RUNTIME_DIR}"
-runtime_dir="$XDG_RUNTIME_DIR/omarchy-radio-atlas"
-data_root=${XDG_DATA_HOME:-$HOME/.local/share}
+runtime_dir=${RADIO_ATLAS_RUNTIME_DIR:-$XDG_RUNTIME_DIR/omarchy-radio-atlas}
+data_root=${RADIO_ATLAS_DATA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}
 state_dir="$data_root/radio-atlas"
 state_file="$state_dir/state.json"
 socket="$runtime_dir/mpv.sock"
 playlist="$runtime_dir/playlist.m3u"
 queue_file="$runtime_dir/playlist.json"
 selection_file="$runtime_dir/play-selection.json"
-status_file="$runtime_dir/status.json"
+status_file=${RADIO_ATLAS_STATUS_FILE:-$runtime_dir/status.json}
 pid_file="$runtime_dir/player.pid"
 proxy_socket="$runtime_dir/proxy.sock"
 generation_file="$runtime_dir/player.generation"
@@ -119,7 +119,7 @@ write_status() {
     echo 'Radio player returned an oversized status' >&2
     return 4
   fi
-  temporary=$(mktemp "$runtime_dir/status.XXXXXX")
+  temporary=$(mktemp "${status_file%/*}/status.XXXXXX")
   printf '%s\n' "$state" > "$temporary"
   mv "$temporary" "$status_file"
   printf '%s\n' "$state"
@@ -193,8 +193,9 @@ status() {
     [[ $loaded_uuid == "$station_uuid" ]] && loaded=true
   fi
 
-  write_status "$(jq -sc --argjson station "$station" --argjson loaded "$loaded" '{
-    running: true,
+  write_status "$(jq -sc --argjson station "$station" --argjson loaded "$loaded" \
+    --argjson supervised "${RADIO_ATLAS_SUPERVISED:-false}" '{
+    running: (if $supervised then ([.[] | select(.request_id == 4) | .data][0] // 0) > 0 else true end),
     paused: ([.[] | select(.request_id == 1) | .data][0] // false),
     muted: ([.[] | select(.request_id == 6) | .data][0] // false),
     title: (([.[] | select(.request_id == 2) | .data][0] // "")
@@ -237,6 +238,16 @@ player_command() {
 
 stop_player() {
   cancel_pending_plays
+  if [[ ${RADIO_ATLAS_SUPERVISED:-false} == true ]]; then
+    if [[ -S $socket ]]; then
+      send_command '{"command":["stop"]}'
+      send_command '{"command":["playlist-clear"]}'
+      send_command '{"command":["set_property","pause",false]}'
+      send_command '{"command":["set_property","mute",false]}'
+    fi
+    status
+    return
+  fi
   if [[ ! -S $socket ]]; then
     if ! terminate_tracked_player; then
       echo 'Radio player could not be stopped' >&2
@@ -384,6 +395,11 @@ play_station() {
   local load_command
   load_command=$(jq -cn --arg path "$temporary_playlist" '{command:["loadlist",$path,"replace"]}')
   if ! send_command "$load_command"; then
+    if [[ ${RADIO_ATLAS_SUPERVISED:-false} == true ]]; then
+      rm -f "$temporary_playlist" "$temporary_queue"
+      echo 'Radio session is unavailable; review playback access and restart the plugin' >&2
+      exit 4
+    fi
     status >/dev/null
     if [[ -S $socket ]] || player_alive; then
       rm -f "$temporary_playlist" "$temporary_queue"
@@ -440,7 +456,7 @@ play_station() {
       || { echo 'Radio player could not refresh its station queue' >&2; exit 4; }
   fi
 
-  if [[ $uuid =~ ^[0-9A-Fa-f-]{20,}$ ]]; then
+  if [[ ${RADIO_ATLAS_SUPERVISED:-false} != true && $uuid =~ ^[0-9A-Fa-f-]{20,}$ ]]; then
     curl --fail --silent --max-time 4 --proto '=https' \
       --user-agent "$user_agent" \
       "https://all.api.radio-browser.info/json/url/$uuid" >/dev/null 2>&1 8>&- &
@@ -449,7 +465,34 @@ play_station() {
   status
 }
 
+serve_player() {
+  [[ ${RADIO_ATLAS_SUPERVISED:-false} == true ]] || return 2
+  exec 7>"$runtime_dir/session.lock"
+  flock -n 7 || { echo 'Radio session is already running' >&2; return 4; }
+  cleanup_dead_player
+  [[ ! -S $socket ]] || return 4
+  write_player_pid "$$"
+  printf '[]\n' > "$queue_file"
+  persist_volume "${2:-70}"
+  export RADIO_ATLAS_STATUS_FILE="$status_file"
+  export RADIO_ATLAS_QUEUE_FILE="$queue_file"
+  # The foreground session and every proxy/player descendant belong to Ward's job.
+  # Controls use the separate player lock; never hold it for the session lifetime.
+  exec 8>&-
+  exec "$script_dir/radio-session" mpv \
+    --no-video --force-window=no --audio-display=no --idle=yes \
+    --loop-playlist=inf --cache-secs=20 --demuxer-max-bytes=8MiB \
+    --demuxer-max-back-bytes=2MiB --network-timeout=30 \
+    --load-unsafe-playlists=no --volume="${2:-70}" --volume-max=100 \
+    --input-ipc-server="$socket" --script="$status_script" \
+    --no-terminal --really-quiet > "$log_file" 2>&1
+}
+
 action=${1:-status}
+if [[ $action == serve ]]; then
+  serve_player "$@"
+  exit $?
+fi
 [[ $action == play ]] || flock -x 8
 case "$action" in
   play)

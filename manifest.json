@@ -30,5 +30,171 @@
     "category": "Media",
     "allowMultiple": false,
     "defaultSection": "left"
+  },
+  "sandbox": {
+    "version": 1,
+    "requests": {
+      "storage": {
+        "required": true
+      },
+      "network": true,
+      "filesystem": [
+        {
+          "name": "player-status",
+          "access": "read"
+        }
+      ],
+      "exec": {
+        "radio-session": {
+          "executable": "/usr/local/bin/radio-atlas-ward-host",
+          "lifetime": "plugin",
+          "tree": {
+            "next": [
+              {
+                "arg": {
+                  "kind": "exact",
+                  "value": "$OMARCHY_PLUGIN_DATA"
+                },
+                "then": {
+                  "next": [
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "serve"
+                      },
+                      "then": {
+                        "next": [
+                          {
+                            "arg": {
+                              "kind": "integer",
+                              "min": 0,
+                              "max": 100
+                            },
+                            "then": {
+                              "end": "session"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "radio-control": {
+          "executable": "/usr/local/bin/radio-atlas-ward-host",
+          "tree": {
+            "next": [
+              {
+                "arg": {
+                  "kind": "exact",
+                  "value": "$OMARCHY_PLUGIN_DATA"
+                },
+                "then": {
+                  "next": [
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "status"
+                      },
+                      "then": {
+                        "end": "status"
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "toggle"
+                      },
+                      "then": {
+                        "end": "toggle"
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "previous"
+                      },
+                      "then": {
+                        "end": "previous"
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "next"
+                      },
+                      "then": {
+                        "end": "next"
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "mute"
+                      },
+                      "then": {
+                        "end": "mute"
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "stop"
+                      },
+                      "then": {
+                        "end": "stop"
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "volume"
+                      },
+                      "then": {
+                        "next": [
+                          {
+                            "arg": {
+                              "kind": "integer",
+                              "min": 0,
+                              "max": 100
+                            },
+                            "then": {
+                              "end": "volume"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "arg": {
+                        "kind": "exact",
+                        "value": "play"
+                      },
+                      "then": {
+                        "next": [
+                          {
+                            "arg": {
+                              "kind": "pattern",
+                              "value": "[0-9A-Fa-f-]{20,64}",
+                              "max": 64
+                            },
+                            "then": {
+                              "end": "play"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
   }
 }

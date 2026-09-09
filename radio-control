@@ -1,0 +1,71 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+
+# This helper runs inside the worker. Persistence, fetching and preparation stay local.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+runtime_dir="$XDG_RUNTIME_DIR/omarchy-radio-atlas"
+install -d -m 700 "$runtime_dir"
+action=${1:-status}
+shift || true
+generation_file="$runtime_dir/ward-generation"
+generation() { if [[ -s $generation_file ]]; then read -r value < "$generation_file"; printf '%s' "$value"; else printf 0; fi; }
+invoke() { /bootstrap --exec radio-control '$OMARCHY_PLUGIN_DATA' "$@"; }
+
+case "$action" in
+  session)
+    volume=$("$script_dir/radio-state" get | jq -r '.volume // 70 | round')
+    exec /bootstrap --exec radio-session '$OMARCHY_PLUGIN_DATA' serve "$volume"
+    ;;
+  play)
+    uuid=${1:-}
+    scope=${2:-results}
+    starting_generation=$(generation)
+    source_file=$(mktemp "$runtime_dir/source.XXXXXX")
+    trap 'rm -f "$source_file" "$source_file.next"' EXIT
+    case "$scope" in
+      world|results) cp "$runtime_dir/$scope.json" "$source_file" ;;
+      selection) cp "$runtime_dir/play-selection.json" "$source_file" ;;
+      favorites|recent)
+        "$script_dir/radio-state" get | jq -c --arg scope "$scope" '.[$scope]' > "$source_file"
+        uuids=$(jq -r 'map(.uuid) | join(",")' "$source_file")
+        if refreshed=$("$script_dir/radio-fetch" resolve "$uuids"); then
+          jq -c --argjson refreshed "$refreshed" \
+            '($refreshed | INDEX(.uuid)) as $byUuid | map($byUuid[.uuid] // .)' \
+            "$source_file" > "$source_file.next"
+          mv "$source_file.next" "$source_file"
+        fi
+        ;;
+      *) echo 'Invalid station scope' >&2; exit 2 ;;
+    esac
+    exec 6>"$runtime_dir/ward-generation.lock"
+    flock -x 6
+    [[ $(generation) == "$starting_generation" ]] || { echo 'Radio playback was canceled' >&2; exit 4; }
+    # One fixed data file is readable by the selected host helper. Retain the same
+    # full queue locally so next/previous stations can be recorded in history.
+    cp "$source_file" "$runtime_dir/playlist.json"
+    cp "$source_file" "$HOME/radio-selection.next"
+    mv "$HOME/radio-selection.next" "$HOME/radio-selection.json"
+    invoke play "$uuid"
+    flock -u 6
+    if [[ $uuid =~ ^[0-9A-Fa-f-]{20,64}$ ]]; then
+      curl --fail --silent --max-time 4 --proto '=https' \
+        --user-agent 'Radio Atlas/0.1.4 (https://github.com/AksharP5/omarchy-radio-atlas)' \
+        "https://all.api.radio-browser.info/json/url/$uuid" >/dev/null 2>&1 || true
+    fi
+    ;;
+  volume)
+    output=$(invoke volume "$@")
+    "$script_dir/radio-state" volume "$1" >/dev/null
+    printf '%s\n' "$output"
+    ;;
+  stop)
+    exec 6>"$runtime_dir/ward-generation.lock"
+    flock -x 6
+    printf '%s\n' "$(( $(generation) + 1 ))" > "$generation_file"
+    flock -u 6
+    invoke stop
+    ;;
+  status|toggle|next|previous|mute) invoke "$action" "$@" ;;
+  *) echo 'Unsupported player action' >&2; exit 2 ;;
+esac
