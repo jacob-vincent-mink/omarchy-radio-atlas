@@ -38,8 +38,8 @@
       "storage": {
         "required": true
       },
-      "networkProxy": true,
-      "audioPlayback": true
+      "networkProxy": { "required": true },
+      "audioPlayback": { "required": true }
     }
   }
 }

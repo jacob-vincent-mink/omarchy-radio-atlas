@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls as QQC
 import Quickshell
 import Quickshell.Io
+import qs.Plugin as Plugin
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
@@ -12,6 +13,7 @@ Item {
 
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var shell: null
+  readonly property var runtime: shell?.runtime || null
   readonly property var playerService: shell ? shell.serviceFor("akshar.radio-atlas") : null
   onPlayerServiceChanged: { if (playerService) applyPlayerState(playerService.playerState) }
   property var manifest: null
@@ -70,7 +72,7 @@ Item {
   readonly property string fetchPath: Qt.resolvedUrl("radio-fetch").toString().replace(/^file:\/\//, "")
   readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
   readonly property string statePath: Qt.resolvedUrl("radio-state").toString().replace(/^file:\/\//, "")
-  readonly property string runtimePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas"
+  readonly property string runtimePath: runtime ? runtime.runtimePath + "/omarchy-radio-atlas" : ""
   readonly property string playSelectionPath: runtimePath + "/play-selection.json"
   readonly property string favoriteSelectionPath: runtimePath + "/favorite-selection.json"
 
@@ -645,16 +647,18 @@ Item {
     onSaveFailed: root.localError = "Favorite could not be updated"
   }
 
-  Process {
+  Plugin.Process {
     id: statusInitProcess
+    runtime: root.runtime
     command: []
     onExited: function(exitCode) {
       if (exitCode === 0) root.statusReady = true
     }
   }
 
-  Process {
+  Plugin.Process {
     id: fetchProcess
+    runtime: root.runtime
     command: []
     stdout: StdioCollector {
       waitForEnd: true
@@ -732,8 +736,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: worldExpandProcess
+    runtime: root.runtime
     command: []
     stdout: StdioCollector {
       waitForEnd: true
@@ -769,8 +774,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: volumeProcess
+    runtime: root.runtime
     property int submittedVolume: -1
     property string output: ""
     property string errorOutput: ""
@@ -807,8 +813,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: playerActionProcess
+    runtime: root.runtime
     property string action: ""
     property string output: ""
     property string errorOutput: ""
@@ -834,8 +841,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: stopProcess
+    runtime: root.runtime
     command: []
     onExited: function(exitCode) {
       if (exitCode !== 0) root.playerError = "Could not stop the player"
@@ -844,8 +852,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: stateProcess
+    runtime: root.runtime
     property string action: ""
     property string output: ""
     property string errorOutput: ""
@@ -882,8 +891,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: historyProcess
+    runtime: root.runtime
     property string output: ""
     property string errorOutput: ""
     command: []

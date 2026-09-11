@@ -1,11 +1,13 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Plugin as Plugin
 
 // One player and status observer per plugin, shared by every bar placement.
 Item {
   id: root
   property var shell: null
+  readonly property var runtime: shell?.runtime || null
   property var manifest: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property string playerState: "{}"
@@ -20,7 +22,7 @@ Item {
   property string playerTitle: ""
   property bool statusReady: false
   readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
-  readonly property string statusPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-radio-atlas/status.json"
+  readonly property string statusPath: runtime ? runtime.runtimePath + "/omarchy-radio-atlas/status.json" : ""
 
   function singleLineText(value, limit) {
     return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, limit)
@@ -78,32 +80,36 @@ Item {
     onFileChanged: reload()
   }
 
-  Process {
+  Plugin.Process {
     id: sessionProcess
+    runtime: root.runtime
     command: [root.playerPath, "session"]
     running: true
     stderr: StdioCollector { onStreamFinished: root.sessionError = text.trim() }
     onExited: function(code) { if (code !== 0 && !root.sessionError) root.sessionError = "Review playback and public proxy permissions." }
   }
 
-  Process {
+  Plugin.Process {
     id: statusInitProcess
+    runtime: root.runtime
     command: []
     onExited: function(exitCode) {
       if (exitCode === 0) root.statusReady = true
     }
   }
 
-  Process {
+  Plugin.Process {
     id: actionProcess
+    runtime: root.runtime
     command: []
     onExited: function(exitCode) {
       if (exitCode === 0) root.statusReady = true
     }
   }
 
-  Process {
+  Plugin.Process {
     id: volumeProcess
+    runtime: root.runtime
     property int submittedVolume: -1
     command: []
     onExited: function(exitCode) {

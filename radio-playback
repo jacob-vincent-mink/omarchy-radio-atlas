@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+
+# The decoder and player IPC stay local; the runtime owns PCM playback.
+"$@" --no-config --load-scripts=no --ytdl=no \
+  --http-proxy="${http_proxy:-}" --ao=pcm --ao-pcm-file=/dev/stdout \
+  --ao-pcm-waveheader=no --audio-format=s16 --audio-samplerate=48000 \
+  --audio-channels=stereo | omarchy-plugin-request --audio-playback
