@@ -4,6 +4,7 @@ import qs.Ui
 
 BarWidget {
   id: root
+  required property var runtime
   moduleName: "akshar.radio-atlas"
 
   readonly property var playerService: bar && bar.shell ? bar.shell.serviceFor(moduleName) : null

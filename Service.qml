@@ -1,13 +1,12 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import qs.Plugin as Plugin
 
 // One player and status observer per plugin, shared by every bar placement.
 Item {
   id: root
   property var shell: null
-  readonly property var runtime: shell?.runtime || null
+  required property var runtime
   property var manifest: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property string playerState: "{}"
@@ -22,7 +21,7 @@ Item {
   property string playerTitle: ""
   property bool statusReady: false
   readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
-  readonly property string statusPath: runtime ? runtime.runtimePath + "/omarchy-radio-atlas/status.json" : ""
+  readonly property string statusPath: runtime.runtimePath + "/omarchy-radio-atlas/status.json"
 
   function singleLineText(value, limit) {
     return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, limit)
@@ -52,9 +51,11 @@ Item {
   }
 
   function runPlayerAction(action) {
-    if (actionProcess.running) return
-    actionProcess.command = [root.playerPath, action]
-    actionProcess.running = true
+    if (actionJob) return
+    actionJob = runtime.runLocal([root.playerPath, action], {onFinished: result => {
+      actionJob = null
+      if (result.exitCode === 0) statusReady = true
+    }})
   }
 
   function changeVolume(delta) {
@@ -65,10 +66,9 @@ Item {
   }
 
   function flushVolume() {
-    if (volumeProcess.running || pendingVolume < 0) return
-    volumeProcess.submittedVolume = pendingVolume
-    volumeProcess.command = [playerPath, "volume", String(pendingVolume)]
-    volumeProcess.running = true
+    if (volumeJob || pendingVolume < 0) return
+    submittedVolume = pendingVolume
+    volumeJob = runtime.runLocal([playerPath, "volume", String(pendingVolume)], {onFinished: finishVolume})
   }
 
   FileView {
@@ -80,63 +80,41 @@ Item {
     onFileChanged: reload()
   }
 
-  Plugin.Process {
-    id: sessionProcess
-    runtime: root.runtime
-    command: [root.playerPath, "session"]
-    running: true
-    stderr: StdioCollector { onStreamFinished: root.sessionError = text.trim() }
-    onExited: function(code) { if (code !== 0 && !root.sessionError) root.sessionError = "Review playback and public proxy permissions." }
-  }
+  property var actionJob: null
+  property var volumeJob: null
+  property int submittedVolume: -1
 
-  Plugin.Process {
-    id: statusInitProcess
-    runtime: root.runtime
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.statusReady = true
-    }
-  }
-
-  Plugin.Process {
-    id: actionProcess
-    runtime: root.runtime
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.statusReady = true
-    }
-  }
-
-  Plugin.Process {
-    id: volumeProcess
-    runtime: root.runtime
-    property int submittedVolume: -1
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode !== 0) {
-        if (root.pendingVolume === submittedVolume) {
-          root.pendingVolume = -1
-          root.playerVolume = root.reportedVolume
-        } else {
-          Qt.callLater(root.flushVolume)
-        }
-        return
-      }
-
-      root.statusReady = true
-      root.reportedVolume = submittedVolume
+  function finishVolume(result) {
+    volumeJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    if (exitCode !== 0) {
       if (root.pendingVolume === submittedVolume) {
         root.pendingVolume = -1
-        root.playerVolume = submittedVolume
-        return
+        root.playerVolume = root.reportedVolume
+      } else {
+        Qt.callLater(root.flushVolume)
       }
-      Qt.callLater(root.flushVolume)
+      return
     }
+
+    root.statusReady = true
+    root.reportedVolume = submittedVolume
+    if (root.pendingVolume === submittedVolume) {
+      root.pendingVolume = -1
+      root.playerVolume = submittedVolume
+      return
+    }
+    Qt.callLater(root.flushVolume)
   }
 
   Component.onCompleted: {
-    statusInitProcess.command = [playerPath, "status"]
-    statusInitProcess.running = true
+    runtime.runLocal([playerPath, "session"], {onFinished: result => {
+      sessionError = String(result.stderr || "").trim()
+      if (result.exitCode !== 0 && !sessionError)
+        sessionError = "Review playback and public proxy permissions."
+    }})
+    runtime.runLocal([playerPath, "status"], {onFinished: result => {
+      if (result.exitCode === 0) statusReady = true
+    }})
   }
-
 }

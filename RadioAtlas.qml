@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls as QQC
 import Quickshell
 import Quickshell.Io
-import qs.Plugin as Plugin
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
@@ -13,7 +12,7 @@ Item {
 
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var shell: null
-  readonly property var runtime: shell?.runtime || null
+  required property var runtime
   readonly property var playerService: shell ? shell.serviceFor("akshar.radio-atlas") : null
   onPlayerServiceChanged: { if (playerService) applyPlayerState(playerService.playerState) }
   property var manifest: null
@@ -58,9 +57,9 @@ Item {
   property string pendingPlayScope: ""
   property var pendingPlayStations: []
   property bool statusReady: false
-  readonly property bool playPreparing: playerActionProcess.running
-    && playerActionProcess.action === "play"
-  readonly property bool playerActionBusy: playerActionProcess.running || stopProcess.running
+  readonly property bool playPreparing: playerActionJob
+    && submittedPlayerAction === "play"
+  readonly property bool playerActionBusy: playerActionJob || stopJob
   property int playlistPosition: -1
   property int playlistCount: 0
   property string playerError: ""
@@ -72,7 +71,7 @@ Item {
   readonly property string fetchPath: Qt.resolvedUrl("radio-fetch").toString().replace(/^file:\/\//, "")
   readonly property string playerPath: Qt.resolvedUrl("radio-control").toString().replace(/^file:\/\//, "")
   readonly property string statePath: Qt.resolvedUrl("radio-state").toString().replace(/^file:\/\//, "")
-  readonly property string runtimePath: runtime ? runtime.runtimePath + "/omarchy-radio-atlas" : ""
+  readonly property string runtimePath: runtime.runtimePath + "/omarchy-radio-atlas"
   readonly property string playSelectionPath: runtimePath + "/play-selection.json"
   readonly property string favoriteSelectionPath: runtimePath + "/favorite-selection.json"
 
@@ -128,7 +127,7 @@ Item {
   function close() {
     opened = false
     worldExpandTimer.stop()
-    if (worldExpandProcess.running) worldExpandProcess.running = false
+    if (worldExpandJob) worldExpandJob.cancel()
   }
 
   function dismiss() {
@@ -211,7 +210,7 @@ Item {
 
   function startFetch(action, value) {
     var nextValue = value || ""
-    if (fetchProcess.running) {
+    if (fetchJob) {
       if (fetchAction === action && fetchValue === nextValue) {
         cancelPendingFetch()
         return
@@ -228,8 +227,7 @@ Item {
     fetchError = ""
     fetchOutput = ""
     fetchStderr = ""
-    fetchProcess.command = nextValue ? [fetchPath, action, nextValue] : [fetchPath, action]
-    fetchProcess.running = true
+    fetchJob = runtime.runLocal(nextValue ? [fetchPath, action, nextValue] : [fetchPath, action], {onFinished: finishFetch})
   }
 
   function showWorld(refresh) {
@@ -388,11 +386,8 @@ Item {
     playCancellationRequested = false
     highlightStationCountry(station, true)
     playerError = ""
-    playerActionProcess.action = "play"
-    playerActionProcess.output = ""
-    playerActionProcess.errorOutput = ""
-    playerActionProcess.command = [playerPath, "play", station.uuid, playerScope]
-    playerActionProcess.running = true
+    submittedPlayerAction = "play"
+    playerActionJob = runtime.runLocal([playerPath, "play", station.uuid, playerScope], {onFinished: finishPlayerAction})
   }
 
   function playPendingStation() {
@@ -407,21 +402,17 @@ Item {
   function playerAction(action) {
     if (playerActionBusy) return
     playerError = ""
-    playerActionProcess.action = action
-    playerActionProcess.output = ""
-    playerActionProcess.errorOutput = ""
-    playerActionProcess.command = [playerPath, action]
-    playerActionProcess.running = true
+    submittedPlayerAction = action
+    playerActionJob = runtime.runLocal([playerPath, action], {onFinished: finishPlayerAction})
   }
 
   function stopPlayer() {
     cancelPendingPlay()
-    if (stopProcess.running || playCancellationRequested) return
-    if (playerActionProcess.running && !playPreparing) return
+    if (stopJob || playCancellationRequested) return
+    if (playerActionJob && !playPreparing) return
     if (playPreparing) playCancellationRequested = true
     playerError = ""
-    stopProcess.command = [playerPath, "stop"]
-    stopProcess.running = true
+    stopJob = runtime.runLocal([playerPath, "stop"], {onFinished: finishStop})
   }
 
   function applyPlayerState(raw) {
@@ -487,29 +478,23 @@ Item {
   }
 
   function flushPlayerVolume() {
-    if (stopProcess.running) {
+    if (stopJob) {
       volumeTimer.restart()
       return
     }
-    if (volumeProcess.running || pendingVolume < 0) return
-    volumeProcess.submittedVolume = pendingVolume
-    volumeProcess.output = ""
-    volumeProcess.errorOutput = ""
-    volumeProcess.command = [root.playerPath, "volume", String(pendingVolume)]
-    volumeProcess.running = true
+    if (volumeJob || pendingVolume < 0) return
+    submittedVolume = pendingVolume
+    volumeJob = runtime.runLocal([root.playerPath, "volume", String(pendingVolume)], {onFinished: finishVolume})
   }
 
   function loadState() {
-    if (stateProcess.running) {
+    if (stateJob) {
       localReloadPending = true
       return
     }
     localReloadPending = false
-    stateProcess.action = "get"
-    stateProcess.output = ""
-    stateProcess.errorOutput = ""
-    stateProcess.command = [statePath, "get"]
-    stateProcess.running = true
+    stateAction = "get"
+    stateJob = runtime.runLocal([statePath, "get"], {onFinished: finishState})
   }
 
   function requestLocalStateReload() {
@@ -518,7 +503,7 @@ Item {
   }
 
   function reloadLocalStateWhenIdle() {
-    if (!localReloadPending || stateProcess.running || historyProcess.running
+    if (!localReloadPending || stateJob || historyJob
         || pendingFavoriteRequests.length > 0 || pendingRecentUuid) return
     loadState()
   }
@@ -550,7 +535,7 @@ Item {
         return
       }
     }
-    if (stateProcess.running) {
+    if (stateJob) {
       pendingFavoriteRequests = pendingFavoriteRequests.concat([request])
       return
     }
@@ -560,16 +545,13 @@ Item {
   function startFavorite(request) {
     if (request.rows.length > 0)
       favoriteSelectionFile.setText(JSON.stringify(request.rows) + "\n")
-    stateProcess.action = "favorite"
-    stateProcess.output = ""
-    stateProcess.errorOutput = ""
-    stateProcess.command = [statePath, "favorite", request.uuid]
-    stateProcess.running = true
+    stateAction = "favorite"
+    stateJob = runtime.runLocal([statePath, "favorite", request.uuid], {onFinished: finishState})
   }
 
   function recordPlayed(uuid) {
     if (!uuid) return
-    if (historyProcess.running) {
+    if (historyJob) {
       pendingRecentUuid = uuid
       return
     }
@@ -577,10 +559,7 @@ Item {
   }
 
   function startRecordPlayed(uuid) {
-    historyProcess.output = ""
-    historyProcess.errorOutput = ""
-    historyProcess.command = [statePath, "played", uuid]
-    historyProcess.running = true
+    historyJob = runtime.runLocal([statePath, "played", uuid], {onFinished: finishHistory})
   }
 
   function refreshLocalSelection() {
@@ -647,280 +626,210 @@ Item {
     onSaveFailed: root.localError = "Favorite could not be updated"
   }
 
-  Plugin.Process {
-    id: statusInitProcess
-    runtime: root.runtime
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.statusReady = true
-    }
+  property var statusInitJob: null
+  function finishStatusInit(result) {
+    statusInitJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    if (exitCode === 0) root.statusReady = true
   }
 
-  Plugin.Process {
-    id: fetchProcess
-    runtime: root.runtime
-    command: []
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.fetchOutput = text
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.fetchStderr = text
-    }
-    onExited: function(exitCode) {
-      var completedOutput = root.fetchOutput
-      root.fetchOutput = ""
-      var stations = null
-      if (exitCode === 0) {
-        try {
-          var parsed = JSON.parse(completedOutput || "[]")
-          if (Array.isArray(parsed)) stations = parsed
-        } catch (error) {
-          stations = null
-        }
-      }
-      if (root.fetchAction === "world" && stations !== null)
-        root.worldStations = RadioModel.mergeStations(
-          root.worldStations, stations, root.worldStationLimit)
-      if (root.fetchAction === "world" && stations !== null)
-        root.scheduleWorldExpansion(1200)
-
-      if (root.pendingFetchAction) {
-        var nextAction = root.pendingFetchAction
-        var nextValue = root.pendingFetchValue
-        root.pendingFetchAction = ""
-        root.pendingFetchValue = ""
-        root.fetching = false
-        Qt.callLater(function() {
-          if (root.mode === nextAction)
-            root.startFetch(nextAction,
-              nextAction === "random" ? root.randomExclusions() : nextValue)
-        })
-        return
-      }
-
-      root.fetching = false
-      if (root.mode !== root.fetchAction) return
-      if (root.fetchAction === "search"
-          && String(searchField.text || "").trim() !== root.fetchValue) return
-      if (exitCode !== 0) {
-        root.fetchError = root.displayStations.length > 0
-          ? "Showing cached stations · Radio Browser is unavailable"
-          : "Radio Browser is unavailable. Try again shortly."
-        return
-      }
-      if (stations === null) {
-        root.fetchError = "Station data was not valid"
-        return
-      }
-      root.fetchError = ""
-
-      if (root.fetchAction === "world") {
-        root.setStationList("world", root.worldStations)
-      } else if (root.fetchAction === "country") {
-        var countryStations = RadioModel.mergeStations(root.results, stations, 500)
-        root.worldStations = RadioModel.prioritizeStations(
-          countryStations, root.worldStations, root.worldStationLimit)
-        root.setStationList("country", countryStations)
-      } else if (root.fetchAction === "search") {
-        root.setStationList("search", stations)
-      } else if (root.fetchAction === "random") {
-        root.setStationList("random", stations)
-        if (stations.length > 0) {
-          root.lastRandomUuid = String(stations[0].uuid || "")
-          root.playSelected()
-        }
-      }
-
-    }
-  }
-
-  Plugin.Process {
-    id: worldExpandProcess
-    runtime: root.runtime
-    command: []
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.worldExpandOutput = text
-    }
-    onExited: function(exitCode) {
-      var output = root.worldExpandOutput
-      root.worldExpandOutput = ""
-      if (!root.opened) return
-      if (exitCode !== 0) {
-        root.scheduleWorldExpansion(30000)
-        return
-      }
-
-      var stations = null
+  property var fetchJob: null
+  function finishFetch(result) {
+    fetchJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    var completedOutput = result.stdout
+    var stations = null
+    if (exitCode === 0) {
       try {
-        var parsed = JSON.parse(output || "[]")
+        var parsed = JSON.parse(completedOutput || "[]")
         if (Array.isArray(parsed)) stations = parsed
       } catch (error) {
         stations = null
       }
-      if (stations === null || stations.length === 0) {
-        root.scheduleWorldExpansion(30000)
-        return
-      }
-
-      var merged = RadioModel.mergeStations(
-        root.worldStations, stations, root.worldStationLimit)
-      var added = merged.length - root.worldStations.length
-      root.worldStations = merged
-      if (root.mode === "world") root.results = merged
-      root.scheduleWorldExpansion(added > 0 ? 1600 : 10000)
     }
+    if (root.fetchAction === "world" && stations !== null)
+      root.worldStations = RadioModel.mergeStations(
+        root.worldStations, stations, root.worldStationLimit)
+    if (root.fetchAction === "world" && stations !== null)
+      root.scheduleWorldExpansion(1200)
+
+    if (root.pendingFetchAction) {
+      var nextAction = root.pendingFetchAction
+      var nextValue = root.pendingFetchValue
+      root.pendingFetchAction = ""
+      root.pendingFetchValue = ""
+      root.fetching = false
+      Qt.callLater(function() {
+        if (root.mode === nextAction)
+          root.startFetch(nextAction,
+            nextAction === "random" ? root.randomExclusions() : nextValue)
+      })
+      return
+    }
+
+    root.fetching = false
+    if (root.mode !== root.fetchAction) return
+    if (root.fetchAction === "search"
+        && String(searchField.text || "").trim() !== root.fetchValue) return
+    if (exitCode !== 0) {
+      root.fetchError = root.displayStations.length > 0
+        ? "Showing cached stations · Radio Browser is unavailable"
+        : "Radio Browser is unavailable. Try again shortly."
+      return
+    }
+    if (stations === null) {
+      root.fetchError = "Station data was not valid"
+      return
+    }
+    root.fetchError = ""
+
+    if (root.fetchAction === "world") {
+      root.setStationList("world", root.worldStations)
+    } else if (root.fetchAction === "country") {
+      var countryStations = RadioModel.mergeStations(root.results, stations, 500)
+      root.worldStations = RadioModel.prioritizeStations(
+        countryStations, root.worldStations, root.worldStationLimit)
+      root.setStationList("country", countryStations)
+    } else if (root.fetchAction === "search") {
+      root.setStationList("search", stations)
+    } else if (root.fetchAction === "random") {
+      root.setStationList("random", stations)
+      if (stations.length > 0) {
+        root.lastRandomUuid = String(stations[0].uuid || "")
+        root.playSelected()
+      }
+    }
+
   }
 
-  Plugin.Process {
-    id: volumeProcess
-    runtime: root.runtime
-    property int submittedVolume: -1
-    property string output: ""
-    property string errorOutput: ""
-    command: []
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: volumeProcess.output = text
+  property var worldExpandJob: null
+  function finishWorldExpand(result) {
+    worldExpandJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    var output = result.stdout
+    if (!root.opened) return
+    if (exitCode !== 0) {
+      root.scheduleWorldExpansion(30000)
+      return
     }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: volumeProcess.errorOutput = text
-    }
-    onExited: function(exitCode) {
-      if (exitCode !== 0) {
-        if (root.pendingVolume === submittedVolume) {
-          root.pendingVolume = -1
-          root.playerVolume = root.reportedVolume
-        } else {
-          Qt.callLater(root.flushPlayerVolume)
-        }
-        root.playerError = "Could not change volume"
-        return
-      }
 
-      root.statusReady = true
-      root.playerError = ""
-      root.reportedVolume = submittedVolume
+    var stations = null
+    try {
+      var parsed = JSON.parse(output || "[]")
+      if (Array.isArray(parsed)) stations = parsed
+    } catch (error) {
+      stations = null
+    }
+    if (stations === null || stations.length === 0) {
+      root.scheduleWorldExpansion(30000)
+      return
+    }
+
+    var merged = RadioModel.mergeStations(
+      root.worldStations, stations, root.worldStationLimit)
+    var added = merged.length - root.worldStations.length
+    root.worldStations = merged
+    if (root.mode === "world") root.results = merged
+    root.scheduleWorldExpansion(added > 0 ? 1600 : 10000)
+  }
+
+  property int submittedVolume: -1
+  property var volumeJob: null
+  function finishVolume(result) {
+    volumeJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    if (exitCode !== 0) {
       if (root.pendingVolume === submittedVolume) {
         root.pendingVolume = -1
-        root.playerVolume = submittedVolume
-        return
-      }
-      Qt.callLater(root.flushPlayerVolume)
-    }
-  }
-
-  Plugin.Process {
-    id: playerActionProcess
-    runtime: root.runtime
-    property string action: ""
-    property string output: ""
-    property string errorOutput: ""
-    command: []
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: playerActionProcess.output = text
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: playerActionProcess.errorOutput = text
-    }
-    onExited: function(exitCode) {
-      var canceled = playerActionProcess.action === "play"
-        && root.playCancellationRequested
-      root.playCancellationRequested = false
-      if (exitCode !== 0 && !canceled) {
-        root.playerError = playerActionProcess.action === "play"
-          ? "Could not play this station" : "Player action failed"
-      }
-      if (exitCode === 0) root.statusReady = true
-      Qt.callLater(root.playPendingStation)
-    }
-  }
-
-  Plugin.Process {
-    id: stopProcess
-    runtime: root.runtime
-    command: []
-    onExited: function(exitCode) {
-      if (exitCode !== 0) root.playerError = "Could not stop the player"
-      else root.statusReady = true
-      Qt.callLater(root.playPendingStation)
-    }
-  }
-
-  Plugin.Process {
-    id: stateProcess
-    runtime: root.runtime
-    property string action: ""
-    property string output: ""
-    property string errorOutput: ""
-    command: []
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: stateProcess.output = text
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: stateProcess.errorOutput = text
-    }
-    onExited: function(exitCode) {
-      if (exitCode === 0) {
-        if (stateProcess.action === "get") {
-          root.applyLocalState(output)
-          root.refreshLocalSelection()
-        } else {
-          root.localError = ""
-          root.localReloadPending = true
-        }
+        root.playerVolume = root.reportedVolume
       } else {
-        root.localError = stateProcess.action === "favorite"
-          ? "Favorite could not be updated" : "Saved stations could not be loaded"
+        Qt.callLater(root.flushPlayerVolume)
       }
-
-      if (root.pendingFavoriteRequests.length > 0) {
-        var nextRequest = root.pendingFavoriteRequests[0]
-        root.pendingFavoriteRequests = root.pendingFavoriteRequests.slice(1)
-        Qt.callLater(function() { root.startFavorite(nextRequest) })
-        return
-      }
-      if (root.localReloadPending) root.requestLocalStateReload()
+      root.playerError = "Could not change volume"
+      return
     }
+
+    root.statusReady = true
+    root.playerError = ""
+    root.reportedVolume = submittedVolume
+    if (root.pendingVolume === submittedVolume) {
+      root.pendingVolume = -1
+      root.playerVolume = submittedVolume
+      return
+    }
+    Qt.callLater(root.flushPlayerVolume)
   }
 
-  Plugin.Process {
-    id: historyProcess
-    runtime: root.runtime
-    property string output: ""
-    property string errorOutput: ""
-    command: []
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: historyProcess.output = text
+  property string submittedPlayerAction: ""
+  property var playerActionJob: null
+  function finishPlayerAction(result) {
+    playerActionJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    var canceled = submittedPlayerAction === "play"
+      && root.playCancellationRequested
+    root.playCancellationRequested = false
+    if (exitCode !== 0 && !canceled) {
+      root.playerError = submittedPlayerAction === "play"
+        ? "Could not play this station" : "Player action failed"
     }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: historyProcess.errorOutput = text
-    }
-    onExited: function(exitCode) {
-      if (exitCode === 0) {
+    if (exitCode === 0) root.statusReady = true
+    Qt.callLater(root.playPendingStation)
+  }
+
+  property var stopJob: null
+  function finishStop(result) {
+    stopJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    if (exitCode !== 0) root.playerError = "Could not stop the player"
+    else root.statusReady = true
+    Qt.callLater(root.playPendingStation)
+  }
+
+  property string stateAction: ""
+  property var stateJob: null
+  function finishState(result) {
+    stateJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    if (exitCode === 0) {
+      if (stateAction === "get") {
+        root.applyLocalState(result.stdout)
+        root.refreshLocalSelection()
+      } else {
         root.localError = ""
         root.localReloadPending = true
-      } else {
-        root.localError = "Listening history could not be updated"
       }
-
-      if (root.pendingRecentUuid) {
-        var nextUuid = root.pendingRecentUuid
-        root.pendingRecentUuid = ""
-        Qt.callLater(function() { root.startRecordPlayed(nextUuid) })
-        return
-      }
-      if (root.localReloadPending) root.requestLocalStateReload()
+    } else {
+      root.localError = stateAction === "favorite"
+        ? "Favorite could not be updated" : "Saved stations could not be loaded"
     }
+
+    if (root.pendingFavoriteRequests.length > 0) {
+      var nextRequest = root.pendingFavoriteRequests[0]
+      root.pendingFavoriteRequests = root.pendingFavoriteRequests.slice(1)
+      Qt.callLater(function() { root.startFavorite(nextRequest) })
+      return
+    }
+    if (root.localReloadPending) root.requestLocalStateReload()
+  }
+
+  property var historyJob: null
+  function finishHistory(result) {
+    historyJob = null
+    const exitCode = result.status === "completed" ? result.exitCode : -1
+    if (exitCode === 0) {
+      root.localError = ""
+      root.localReloadPending = true
+    } else {
+      root.localError = "Listening history could not be updated"
+    }
+
+    if (root.pendingRecentUuid) {
+      var nextUuid = root.pendingRecentUuid
+      root.pendingRecentUuid = ""
+      Qt.callLater(function() { root.startRecordPlayed(nextUuid) })
+      return
+    }
+    if (root.localReloadPending) root.requestLocalStateReload()
   }
 
   Timer {
@@ -935,11 +844,10 @@ Item {
     interval: 1600
     repeat: false
     onTriggered: {
-      if (!root.opened || worldExpandProcess.running
+      if (!root.opened || worldExpandJob
           || root.worldStations.length >= root.worldStationLimit) return
       root.worldExpandOutput = ""
-      worldExpandProcess.command = [root.fetchPath, "world-more"]
-      worldExpandProcess.running = true
+      worldExpandJob = runtime.runLocal([root.fetchPath, "world-more"], {onFinished: finishWorldExpand})
     }
   }
 
@@ -951,8 +859,7 @@ Item {
   }
 
   Component.onCompleted: {
-    statusInitProcess.command = [playerPath, "status"]
-    statusInitProcess.running = true
+    statusInitJob = runtime.runLocal([playerPath, "status"], {onFinished: finishStatusInit})
   }
 
   PanelWindow {
@@ -1521,9 +1428,9 @@ Item {
                 iconText: "\uf04d"
                 tooltipText: "Stop"
                 enabled: (root.playerRunning || root.playPreparing)
-                  && !stopProcess.running
+                  && !stopJob
                   && !root.playCancellationRequested
-                  && (!playerActionProcess.running || root.playPreparing)
+                  && (!playerActionJob || root.playPreparing)
                 focusable: true
                 foreground: root.foreground
                 accent: root.accent
@@ -1565,7 +1472,7 @@ Item {
                 fillColor: root.accent
                 knobColor: root.foreground
                 tickColor: root.background
-                enabled: !stopProcess.running
+                enabled: !stopJob
                 Accessible.name: "Radio volume"
                 onMoved: function(nextVolume) { root.setPlayerVolume(nextVolume) }
                 onRightClicked: root.playerAction("mute")

@@ -5,6 +5,10 @@ import vm from "node:vm"
 import { fileURLToPath } from "node:url"
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
+const panelSource = fs.readFileSync(path.join(testDir, "..", "RadioAtlas.qml"), "utf8")
+const rootProperties = new Set([...panelSource.matchAll(/^  (?:readonly )?property \w+ (\w+):/gm)].map(match => match[1]))
+for (const match of panelSource.matchAll(/^  function (\w+)\(/gm))
+  assert.ok(!rootProperties.has(match[1]), `root property shadows callable ${match[1]}`)
 const source = fs.readFileSync(path.join(testDir, "..", "RadioModel.js"), "utf8")
 const model = { Math, Number, Array, String, isFinite }
 vm.createContext(model)

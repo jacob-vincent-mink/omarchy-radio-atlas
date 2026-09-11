@@ -11,15 +11,15 @@ This branch retains Radio Atlas's globe, catalog/search/cache helpers, station m
 
 One `Service.qml` owns the foreground player process and watches the sandbox-local `status.json`. All bar placements share that service, and the panel consumes its cached status. Closing the panel or removing one bar placement does not stop another placement's player. Disabling/revoking the plugin or stopping its worker stops playback. Stop empties the playlist while leaving the one supervised session idle for another station.
 
-Both plugin modes use the same supervised `radio-playback` pipeline: local mpv decoding into `omarchy-plugin-request --audio-playback`. Ward supplies its private network namespace and localhost proxy; YOLO uses ordinary host networking. Neither plugin mode calls the older nested-namespace wrapper. The original `radio-proxy`/`radio-sandbox` implementation remains only for the separate legacy CLI and its upstream regression tests. Decoding, volume, mute, playlists and player IPC remain local. Ward's host audio backend receives only fixed-format PCM, never a station URL or plugin-supplied filename.
+Both plugin modes use the same supervised `radio-playback` pipeline: local mpv decoding into `omarchy-plugin-request --audio-playback`. Both run inside Ward's private network namespace and use its admitted proxy. Neither plugin mode calls the older nested-namespace wrapper. The original `radio-proxy`/`radio-sandbox` implementation remains only for the separate legacy CLI and its upstream regression tests. Decoding, volume, mute, playlists and player IPC remain local. Ward's host audio backend receives only fixed-format PCM, never a station URL or plugin-supplied filename.
 
 ## Portable runtime
 
-One revision now supports Ward and explicit YOLO using `qs.Plugin.Process` and `shell.runtime` paths. The shared service, UI and scripts contain no execution-mode branch. The manifest remains unchanged between modes. YOLO is arbitrary same-account code, not permission-enforced containment; host-owned installation provenance selects it explicitly.
+The service and bar entry declare `required property var runtime`; the host initializes it before component completion. Bundled scripts run through `runtime.runLocal()` with structured job results, and storage paths come from the same runtime. The shared service, UI and scripts contain no execution-mode branch. Normal mode and explicit YOLO both use Ward; YOLO approves all declared supported permissions without bypassing the broker. The manifest remains unchanged between modes.
 
-The old plugin-specific `radio-host` adapter is removed, and `radio-session` returns to its original implementation apart from the Bash shebang. Including the new eight-line playback script, production-code churn relative to original `main` drops from 562 to 427 changed lines compared with the prior Ward-only port (additions plus deletions; manifest, docs and tests excluded).
+The old plugin-specific `radio-host` adapter is removed. The matching host API is still unpublished, so this branch requires the current local required-runtime implementation in addition to the linked Omarchy sandbox work.
 
-A fresh external private-display trial installed, enabled and opened the actual revision in both modes. Both catalogs populated 500 public stations, through Ward's admitted proxy or YOLO's ordinary networking, and the rendered globe/catalog states were inspected. These are current startup/render observations, not a new playback or all-controls matrix. The earlier PCM trial below predates the portable helper switch.
+A fresh external private-display trial installed, enabled and opened the actual revision in both modes; both catalogs populated through Ward's admitted proxy. A subsequent live normal-mode rehearsal verified station playback, pause, resume, stop and a persisted favorite. It found and fixed a state property that shadowed the original `playerAction()` function; a focused regression now checks for that collision. The host output remained muted, so this is not a physical-speaker claim. The earlier synthetic PCM trial below predates the job API switch.
 
 Publishing a player to desktop MPRIS controls is not included in these permissions. The panel and bar controls work locally; the old host player's MPRIS behavior is not claimed for this adaptation.
 
@@ -36,7 +36,9 @@ omarchy plugin enable akshar.radio-atlas
 
 Stop the plugin before reapproval, and review again after bundle changes. All three permissions are required for this revision: persistent radio preferences, live catalog/stream access and playback are its core function. Requests are not grants, and none is preselected. Denying any one prevents activation rather than starting a radio that cannot fulfill that function. These permissions do not include microphone or system-output recording.
 
-## Verification
+## Historical verification
+
+The following trials used earlier port/runtime revisions. Current required-runtime checks and live controls are listed above; these older matrices were not repeated in full.
 
 The new adaptation passed repeated bounded private-display trials with the matching native runtime and staged adapter. The original catalog populated through Ward's proxy, and sandbox-local mpv streamed a live HTTPS station into Ward's PCM endpoint for more than ten seconds. A private synthetic PipeWire output received nonzero samples. Pause/resume updated the original status script and panel; removing a second bar placement left the one shared decoder and surviving widget running. Revocation removed every tracked controller, worker, decoder, audio backend and proxy process. The rendered globe, catalog and playing panel were inspected.
 
